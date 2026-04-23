@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Twogether"/>
+<title>Twogether</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;color:#fff;font-family:'Helvetica Neue',Arial,sans-serif;min-height:100vh;}
+input,textarea{-webkit-appearance:none;border-radius:0;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.2);padding:10px 0;color:#fff;font-size:15px;outline:none;width:100%;}
+textarea{font-family:Georgia,serif;font-style:italic;font-size:14px;resize:none;line-height:1.7;}
+button{cursor:pointer;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:0.2}50%{opacity:0.9}}
+.spin{width:24px;height:24px;border:2px solid rgba(255,255,255,0.1);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;}
+nav{position:sticky;top:0;z-index:10;background:rgba(0,0,0,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.1);padding:0 24px;display:flex;justify-content:space-between;align-items:center;height:52px;}
+nav span{font-size:11px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;}
+.tabs{display:flex;gap:20px;}
+.tab{background:none;border:none;border-bottom:2px solid transparent;padding:4px 0;color:rgba(255,255,255,0.4);font-size:10px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;}
+.tab.active{color:#fff;border-bottom-color:#fff;}
+.page{padding:48px 24px 80px;max-width:560px;margin:0 auto;}
+h1{font-weight:700;font-size:clamp(40px,11vw,60px);line-height:0.92;letter-spacing:-0.02em;text-transform:uppercase;margin-bottom:20px;}
+h2{font-weight:700;font-size:clamp(26px,7vw,40px);line-height:0.95;letter-spacing:-0.02em;text-transform:uppercase;margin-bottom:20px;}
+.label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:8px;display:block;}
+.divider{height:1px;background:rgba(255,255,255,0.1);margin:20px 0;}
+.italic{font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.6);font-size:14px;line-height:1.75;}
+.btn{display:block;width:100%;background:#fff;border:none;padding:14px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;margin-top:32px;}
+.btn:disabled{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.3);}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);display:block;width:100%;padding:13px;font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;margin-top:12px;}
+.progress{height:2px;background:rgba(255,255,255,0.1);margin-bottom:32px;position:relative;}
+.progress-fill{position:absolute;top:0;left:0;height:100%;background:#fff;transition:width 0.3s;}
+.person-btn{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.1);padding:20px 0;display:flex;justify-content:space-between;align-items:center;text-align:left;}
+.person-name{font-weight:700;font-size:clamp(24px,6vw,34px);color:#fff;text-transform:uppercase;letter-spacing:-0.01em;}
+.badge{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;}
+.badge.done{color:#E8FF6B;}
+.badge.todo{color:rgba(255,255,255,0.38);}
+.reveal-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.reveal-section{border-bottom:1px solid rgba(255,255,255,0.08);padding:16px 0;}
+.reveal-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:10px;}
+.reveal-text{font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.75);font-size:13px;line-height:1.65;}
+.bullet-row{display:flex;gap:12px;margin-bottom:8px;}
+.bullet-dash{color:rgba(255,255,255,0.35);font-size:11px;margin-top:2px;flex-shrink:0;}
+.waiting-dots{display:flex;gap:6px;margin-top:20px;}
+.dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.4);}
+.err{color:rgba(255,80,60,0.9);font-family:Georgia,serif;font-style:italic;font-size:13px;margin-top:10px;display:none;}
+.banner{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.97);border-top:2px solid #E8FF6B;padding:20px 24px;z-index:100;}
+.banner-title{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#E8FF6B;margin-bottom:6px;}
+.email-btn{display:inline-block;background:#E8FF6B;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:12px 24px;text-decoration:none;margin-top:10px;}
+.center{display:flex;align-items:center;justify-content:center;height:80vh;flex-direction:column;gap:16px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// CONFIG
+var SURL = 'https://kpzeahhwldycfgaxlvsx.supabase.co';
+var SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwemVhaGh3bGR5Y2ZnYXhsdnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzQ0MDAsImV4cCI6MjA5MjMxMDQwMH0.czEq-f5EhaiP2mD-XHdz2BZ08sqkeCv_HO8cbKu77ZM';
+var EMAIL = 'Ninanaclay0306@gmail.com';
+
+// SUPABASE
+function sbHeaders() {
+  return {'apikey':SKEY,'Authorization':'Bearer '+SKEY,'Content-Type':'application/json','Accept':'application/json'};
+}
+async function sbGet(table, q) {
+  try {
+    var r = await fetch(SURL+'/rest/v1/'+table+'?'+(q||''), {headers:sbHeaders()});
+    if (!r.ok) { console.error('GET fail', r.status, await r.text()); return null; }
+    return await r.json();
+  } catch(e) { console.error('GET err', e); return null; }
+}
+async function sbPost(table, data) {
+  try {
+    var r = await fetch(SURL+'/rest/v1/'+table, {
+      method:'POST',
+      headers:Object.assign({}, sbHeaders(), {'Prefer':'resolution=merge-duplicates,return=representation'}),
+      body:JSON.stringify(data)
+    });
+    var text = await r.text();
+    if (!r.ok) { console.error('POST fail', r.status, text); return null; }
+    return text ? JSON.parse(text) : [];
+  } catch(e) { console.error('POST err', e); return null; }
+}
+
+// QUESTIONS
+var QS = [
+  {id:'appreciation',label:'Appreciation',num:'01',q:'What are 3 things your partner did this week that you loved?',type:'bullets',req:true},
+  {id:'loved',label:'Feeling Loved',num:'02',q:'What are 3 things your partner did that made you feel loved or cared for?',type:'bullets',req:true},
+  {id:'attraction',label:'Admiration',num:'03',q:'What are 3 moments you felt attracted to, proud of, or admired your partner?',type:'bullets',req:true,hint:'Playful, emotional, physical — all welcome.'},
+  {id:'deep',label:'Deep Appreciation',num:'04',q:'What is one thing you deeply appreciate about your partner right now?',type:'para',req:true,max:300},
+  {id:'improve',label:'Growth',num:'05',q:'What is one thing you would like your partner to improve?',type:'para',req:true,hint:'Be kind and specific. Focus on behavior.'},
+  {id:'future',label:'Next Week',num:'06',q:'What is one thing you want to prioritize together next week?',type:'para',req:true},
+  {id:'open',label:'Anything Else',num:'07',q:'Anything else you want to say?',type:'para',req:false,hint:'Optional.'},
+];
+function emptyA() { return {appreciation:['','',''],loved:['','',''],attraction:['','',''],deep:'',improve:'',future:'',open:''}; }
+
+// WEEK
+function getWeek() {
+  var d = new Date();
+  var utc = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7));
+  var y = utc.getUTCFullYear();
+  var w = Math.ceil((((utc - new Date(Date.UTC(y,0,1)))/86400000)+1)/7);
+  return y + '-W' + String(w).padStart(2,'0');
+}
+function wkLabel(wk) {
+  var parts = wk.split('-W');
+  var y = parseInt(parts[0]);
+  var w = parseInt(parts[1]);
+  var jan4 = new Date(Date.UTC(y,0,4));
+  var start = new Date(jan4);
+  start.setUTCDate(jan4.getUTCDate() - (jan4.getUTCDay()||7) + 1 + (w-1)*7);
+  var end = new Date(start);
+  end.setUTCDate(start.getUTCDate()+6);
+  var f = function(d) { return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); };
+  return f(start) + ' – ' + f(end);
+}
+
+// STORAGE
+function lsGet(k) { try { var v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch(e){return null;} }
+function lsSet(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch(e){} }
+function mkCid(a,b) { return [a,b].map(function(n){return n.toLowerCase().trim();}).sort().join('_').replace(/\s+/g,''); }
+
+// STATE
+var ST = {
+  screen: 'loading',
+  tab: 0,
+  names: lsGet('tw_names'),
+  cid: lsGet('tw_cid'),
+  li: null,
+  wd: null,
+  weeks: [],
+  step: 0,
+  ans: emptyA(),
+  expDone: false,
+  mailto: null,
+  poll: null,
+  archExp: {},
+  archCache: {},
+  showEmailPrompt: false,
+  pendingExport: null,
+  showDeleteConfirm: false
+};
+
+function set(patch) {
+  for (var k in patch) ST[k] = patch[k];
+  draw();
+}
+
+// DATA
+async function loadWk(cid, wk) {
+  var rows = await sbGet('checkins', 'couple_id=eq.'+cid+'&iso_week=eq.'+wk+'&select=partner_index,answers,submitted_at');
+  if (!rows || !rows.length) return null;
+  var d = {};
+  rows.forEach(function(r) {
+    d['a'+r.partner_index] = r.answers;
+    d['t'+r.partner_index] = r.submitted_at;
+  });
+  return d;
+}
+async function loadWeeks(cid) {
+  var rows = await sbGet('checkins', 'couple_id=eq.'+cid+'&select=iso_week&order=iso_week.desc');
+  if (!rows) return [];
+  var seen = {}, out = [];
+  rows.forEach(function(r) { if(!seen[r.iso_week]){seen[r.iso_week]=1;out.push(r.iso_week);} });
+  return out;
+}
+async function sbDelete(table, query) {
+  try {
+    var r = await fetch(SURL+'/rest/v1/'+table+'?'+query, {
+      method:'DELETE',
+      headers:Object.assign({}, sbHeaders(), {'Prefer':'return=representation'})
+    });
+    if (!r.ok) { console.error('DELETE fail', r.status, await r.text()); return null; }
+    return true;
+  } catch(e) { console.error('DELETE err', e); return null; }
+}
+
+async function saveWk(cid, wk, pi, ans) {
+  return sbPost('checkins', {couple_id:cid, iso_week:wk, partner_index:pi, answers:ans, submitted_at:new Date().toISOString()});
+}
+async function deleteWk(cid, wk, pi) {
+  return sbDelete('checkins', 'couple_id=eq.'+cid+'&iso_week=eq.'+wk+'&partner_index=eq.'+pi);
+}
+
+function startPoll() {
+  if (ST.poll) clearInterval(ST.poll);
+  ST.poll = setInterval(async function() {
+    if (!ST.cid) return;
+    var wd = await loadWk(ST.cid, getWeek());
+    if (wd && wd.a0 && wd.a1) {
+      clearInterval(ST.poll); ST.poll = null;
+      set({wd:wd, tab:1});
+    }
+  }, 5000);
+}
+function stopPoll() { if (ST.poll) { clearInterval(ST.poll); ST.poll = null; } }
+
+// BOOT
+async function boot() {
+  try {
+    if (!ST.names || !ST.cid) { set({screen:'welcome'}); return; }
+    var wk = getWeek();
+    var wd = await loadWk(ST.cid, wk);
+    var weeks = await loadWeeks(ST.cid);
+    set({screen:'main', wd:wd, weeks:weeks, tab:0});
+  } catch(e) {
+    console.error('boot', e);
+    set({screen:'welcome'});
+  }
+}
+// RENDER HELPERS
+function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+var root = document.getElementById('root');
+
+boot();
+
+function draw() {
+  var s = ST;
+  if (s.screen === 'loading') { root.innerHTML = '<div class="center"><div class="spin"></div><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.3);">Connecting</span></div>'; return; }
+  if (s.screen === 'welcome') { root.innerHTML = drawWelcome(); return; }
+  if (s.screen === 'setup')   { root.innerHTML = drawSetup();   return; }
+
+  var s0=!!(s.wd&&s.wd.a0), s1=!!(s.wd&&s.wd.a1), both=s0&&s1;
+  var mySub = s.li!==null ? (s.li===0?s0:s1) : false;
+  var content = '';
+  if (s.tab===0) {
+    if (s.li===null) content = drawLogin();
+    else if (s.screen==='form') content = drawForm();
+    else if (mySub) content = drawWaiting();
+    else content = drawForm();
+  } else if (s.tab===1) {
+    content = both ? drawReveal() : drawRevealLocked();
+  } else {
+    content = drawArchive();
+  }
+
+  root.innerHTML = drawNav(s.tab, both) + 
+    (s.li!==null ? '<div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">As <strong style="color:#fff">'+esc(s.names[s.li])+'</strong></span><button onclick="doSwitch()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Switch</button></div>' : '') +
+    '<div style="max-width:560px;margin:0 auto;">' + content + '</div>' +
+    (s.expDone ? drawBanner() : '') +
+    (s.showEmailPrompt ? drawEmailPrompt() : '') +
+    (s.showDeleteConfirm ? drawDeleteConfirm() : '');
+  bindInputs();
+}
+
+function drawNav(tab, both) {
+  var tabs = ['Check-In','Reveal','Archive'];
+  var btns = tabs.map(function(t,i) {
+    var dot = (t==='Reveal'&&both&&tab!==1) ? '<span style="position:absolute;top:-3px;right:-7px;width:5px;height:5px;border-radius:50%;background:#E8FF6B;"></span>' : '';
+    return '<button class="tab'+(tab===i?' active':'')+'" onclick="setTab('+i+')" style="position:relative;">'+t+dot+'</button>';
+  }).join('');
+  return '<nav><span>Twogether</span><div class="tabs">'+btns+'</div></nav>';
+}
+
+function drawWelcome() {
+  return '<div class="page"><h1>TWO<br>GETHER</h1><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:20px;">Weekly Check-In · Cloud Synced</div><div class="divider"></div><p class="italic" style="margin:20px 0;">A private ritual for two. Each partner fills out independently — answers reveal only when both have submitted.</p><div class="divider"></div>'+
+    [['Appreciation','What you loved'],['Connection','Feeling cared for'],['Admiration','Pride & attraction'],['Growth','One thing to improve'],['Next Week','Priorities together']].map(function(x){return '<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);"><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+x[0]+'</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.38);font-size:12px;">'+x[1]+'</span></div>';}).join('') +
+    '<button class="btn" onclick="goSetup()">Begin</button></div>';
+}
+
+function drawSetup() {
+  return '<div class="page"><span class="label">First time setup</span><h2>Who\'s in<br>this couple?</h2><div class="divider"></div><p class="italic" style="margin-bottom:24px;">Use the <strong style="color:#fff;">exact same names</strong> on both phones — this links you together.</p>'+
+    '<div style="margin-bottom:20px;"><label class="label">Partner 1</label><input id="p0" type="text" placeholder="Name" oninput="chkS()"/></div>'+
+    '<div style="margin-bottom:20px;"><label class="label">Partner 2</label><input id="p1" type="text" placeholder="Name" oninput="chkS()"/></div>'+
+    '<button class="btn" id="sBtn" onclick="doSetup()" disabled>Continue</button>'+
+    '<div class="err" id="sErr"></div></div>';
+}
+
+function drawLogin() {
+  var s=ST, s0=!!(s.wd&&s.wd.a0), s1=!!(s.wd&&s.wd.a1);
+  return '<div class="page"><div style="display:flex;justify-content:space-between;margin-bottom:28px;"><span class="label">Week of</span><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+wkLabel(getWeek())+'</span></div><div class="divider"></div><p class="italic" style="margin:20px 0;">Select your name. Answers stay private until both submit.</p>'+
+    s.names.map(function(n,i){
+      var done=[s0,s1][i];
+      return '<button class="person-btn" onclick="doLogin('+i+')"><span class="person-name">'+esc(n)+'</span><span class="badge '+(done?'done':'todo')+'">'+(done?'Done ✓':'Check in →')+'</span></button>';
+    }).join('')+'</div>';
+}
+
+function drawForm() {
+  var s=ST, sec=QS[s.step];
+  var pct = Math.round(((s.step+1)/QS.length)*100);
+  var inp='';
+  if (sec.type==='bullets') {
+    inp = s.ans[sec.id].map(function(v,i){
+      return '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;"><span style="font-size:10px;color:rgba(255,255,255,0.25);min-width:16px;">'+(i+1)+'</span><input type="text" value="'+esc(v)+'" data-b="'+sec.id+':'+i+'" placeholder="Moment '+(i+1)+'" style="flex:1;"/></div>';
+    }).join('');
+  } else {
+    inp = '<textarea data-p="'+sec.id+'" rows="4" placeholder="Write here…">'+esc(s.ans[sec.id])+'</textarea>';
+    if (sec.hint) inp += '<div style="font-size:9px;font-style:italic;color:rgba(255,255,255,0.3);margin-top:6px;">'+sec.hint+'</div>';
+    if (sec.max) inp += '<div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px;" id="cc">'+s.ans[sec.id].length+'/'+sec.max+'</div>';
+  }
+  return '<div class="page" style="padding-top:0;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:0;">'+
+    '<button onclick="fBack()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;">← Back</button>'+
+    '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(s.names[s.li])+'</span>'+
+    '<span style="font-size:10px;color:rgba(255,255,255,0.38);">'+(s.step+1)+' / '+QS.length+'</span></div>'+
+    '<div class="progress"><div class="progress-fill" style="width:'+pct+'%;"></div></div>'+
+    '<span class="label">'+sec.num+' — '+sec.label+(sec.req?'':' (optional)')+'</span>'+
+    '<h2 style="font-size:clamp(18px,4.5vw,24px);margin-bottom:24px;">'+sec.q+'</h2>'+
+    '<div id="finp">'+inp+'</div>'+
+    '<div class="err" id="ferr">This field is required.</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:36px;">'+
+    (s.step>0?'<button onclick="fPrev()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;">← Prev</button>':'<div></div>')+
+    '<button id="nb" onclick="fNext()" style="background:#fff;border:none;padding:13px 28px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">'+(s.step===QS.length-1?'Submit':'Next →')+'</button>'+
+    '</div></div>';
+}
+
+function drawWaiting() {
+  var s=ST, pn=s.names[s.li===0?1:0];
+  var pd = s.li===0 ? !!(s.wd&&s.wd.a1) : !!(s.wd&&s.wd.a0);
+  return '<div class="page"><span class="label">Submitted</span><h2>'+esc(s.names[s.li])+',<br>you\'re done.</h2><div class="divider"></div>'+
+    '<p class="italic">'+(pd?'Both submitted! Open the Reveal tab to read together.':'Waiting for '+esc(pn)+' to complete. This page updates automatically.')+'</p>'+
+    (!pd?'<div class="waiting-dots"><div class="dot" style="animation:pulse 1.4s ease-in-out 0s infinite;"></div><div class="dot" style="animation:pulse 1.4s ease-in-out 0.2s infinite;"></div><div class="dot" style="animation:pulse 1.4s ease-in-out 0.4s infinite;"></div></div>':'')+
+    '<div style="height:1px;background:rgba(255,255,255,0.08);margin:32px 0;"></div>'+
+    '<span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">Need to change something?</span>'+
+    '<button onclick="doEditEntry()" style="display:block;width:100%;background:transparent;border:1px solid rgba(255,255,255,0.2);padding:13px;color:rgba(255,255,255,0.6);font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;margin-top:12px;margin-bottom:10px;cursor:pointer;">Edit My Answers ✎</button>'+
+    '<button onclick="set({showDeleteConfirm:true})" style="display:block;width:100%;background:transparent;border:1px solid rgba(255,80,60,0.3);padding:13px;color:rgba(255,80,60,0.6);font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Delete My Submission</button>'+
+    '</div>';
+}
+
+function drawReveal() {
+  var s=ST, a=[s.wd.a0,s.wd.a1];
+  var rows = QS.map(function(sec) {
+    var empty = function(v) { return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim()); };
+    if (empty(a[0]&&a[0][sec.id]) && empty(a[1]&&a[1][sec.id])) return '';
+    var cols = [0,1].map(function(pi) {
+      var val = a[pi] && a[pi][sec.id];
+      if (Array.isArray(val)) {
+        return val.filter(function(v){return v&&v.trim();}).map(function(v){return '<div class="bullet-row"><span class="bullet-dash">—</span><span class="reveal-text">'+esc(v)+'</span></div>';}).join('');
+      }
+      return '<p class="reveal-text" style="margin:0;color:'+(val&&val.trim()?'rgba(255,255,255,0.75)':'rgba(255,255,255,0.2)')+';">'+esc((val&&val.trim())||'—')+'</p>';
+    });
+    return '<div class="reveal-section"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);">'+cols[0]+'</div><div>'+cols[1]+'</div></div></div>';
+  }).join('');
+  return '<div class="page"><span class="label">'+wkLabel(getWeek())+'</span><h2>This<br>Week\'s<br>Reveal</h2>'+
+    '<div class="divider"></div>'+
+    '<div class="reveal-grid" style="padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.1);">'+
+    s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+
+    '</div>'+rows+'</div>';
+}
+
+function drawRevealLocked() {
+  var s=ST, s0=!!(s.wd&&s.wd.a0), s1=!!(s.wd&&s.wd.a1);
+  var msg = s0&&!s1 ? 'Waiting for '+esc(s.names[1])+' to submit.' : s1&&!s0 ? 'Waiting for '+esc(s.names[0])+' to submit.' : 'Both partners need to submit first.';
+  return '<div class="page"><span class="label">Reveal</span><h2 style="color:rgba(255,255,255,0.2);">Not yet.</h2><p class="italic">'+msg+'</p></div>';
+}
+
+function drawArchive() {
+  var s=ST;
+  if (!s.weeks.length) return '<div class="page"><p class="italic">Your archive will appear here after your first completed check-in.</p></div>';
+  var rows = s.weeks.map(function(wk,i) {
+    var open = !!s.archExp[wk], data = s.archCache[wk];
+    var inner = '';
+    if (open) {
+      if (!data) { inner = '<div style="padding:16px;text-align:center;"><div class="spin" style="margin:0 auto;width:16px;height:16px;"></div></div>'; }
+      else if (data.a0&&data.a1) {
+        var a=[data.a0,data.a1];
+        var empty = function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
+        inner = '<div style="padding-bottom:8px;"><div class="reveal-grid" style="margin-bottom:12px;padding-top:4px;">'+s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+'</div>'+
+          QS.map(function(sec){
+            if(empty(a[0]&&a[0][sec.id])&&empty(a[1]&&a[1][sec.id]))return'';
+            var cols=[0,1].map(function(pi){
+              var val=a[pi]&&a[pi][sec.id];
+              if(Array.isArray(val))return val.filter(function(v){return v&&v.trim();}).map(function(v){return '<div class="bullet-row"><span class="bullet-dash">—</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.6);font-size:12px;line-height:1.6;">'+esc(v)+'</span></div>';}).join('');
+              return '<p style="font-family:Georgia,serif;font-style:italic;color:'+(val&&val.trim()?'rgba(255,255,255,0.6)':'rgba(255,255,255,0.2)')+';font-size:12px;line-height:1.6;margin:0;">'+esc((val&&val.trim())||'—')+'</p>';
+            });
+            return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid">'+cols[0]+cols[1]+'</div></div>';
+          }).join('')+'</div>';
+      } else { inner = '<p class="italic" style="padding:12px 0 20px;">Incomplete — awaiting both partners.</p>'; }
+    }
+    return '<div style="border-bottom:1px solid rgba(255,255,255,0.1);"><button onclick="togArch(\''+wk+'\')" style="width:100%;background:transparent;border:none;padding:18px 0;display:flex;justify-content:space-between;align-items:center;text-align:left;cursor:pointer;">'+
+      '<div><div style="font-weight:700;font-size:clamp(15px,4vw,20px);color:#fff;text-transform:uppercase;letter-spacing:-0.01em;margin-bottom:3px;">'+wkLabel(wk)+'</div>'+
+      '<div style="display:flex;gap:10px;"><span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.35);">#'+String(s.weeks.length-i).padStart(2,'0')+'</span>'+
+      (wk===getWeek()?'<span style="font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#E8FF6B;">Current</span>':'')+
+      (s.archCache[wk]&&s.archCache[wk].a0&&s.archCache[wk].a1?'<span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.25);">Complete</span>':'')+
+      '</div></div>'+
+      '<span style="color:rgba(255,255,255,0.35);font-size:20px;transform:'+(open?'rotate(45deg)':'none')+';transition:transform 0.2s;display:block;">+</span></button>'+
+      (open?'<div>'+inner+'</div>':'')+
+      '</div>';
+  }).join('');
+  return '<div class="page"><span class="label">Archive</span><h2>'+s.weeks.length+' Week'+(s.weeks.length!==1?'s':'')+' Together</h2><div class="divider"></div>'+rows+'</div>';
+}
+
+function drawDeleteConfirm() {
+  return '<div style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:24px;">'+
+    '<div style="background:#000;border:1px solid rgba(255,255,255,0.15);padding:36px;width:100%;max-width:400px;">'+
+    '<div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,80,60,0.7);margin-bottom:10px;">Delete Submission</div>'+
+    '<h2 style="font-weight:700;font-size:clamp(22px,6vw,32px);line-height:0.95;letter-spacing:-0.02em;text-transform:uppercase;color:#fff;margin-bottom:20px;">Are you<br>sure?</h2>'+
+    '<div style="height:1px;background:rgba(255,255,255,0.1);margin-bottom:20px;"></div>'+
+    '<p style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.5);font-size:13px;line-height:1.7;margin-bottom:28px;">This will delete your answers for this week. You can re-submit fresh answers after.</p>'+
+    '<div style="display:flex;gap:12px;">'+
+    '<button onclick="set({showDeleteConfirm:false})" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.2);padding:13px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Cancel</button>'+
+    '<button onclick="doDeleteEntry()" style="flex:2;background:rgba(255,60,60,0.9);border:none;padding:13px;color:#fff;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Delete →</button>'+
+    '</div></div></div>';
+}
+
+async function doDeleteEntry() {
+  var cid=ST.cid, wk=getWeek(), li=ST.li;
+  set({showDeleteConfirm:false, screen:'loading'});
+  await deleteWk(cid, wk, li);
+  var wd = await loadWk(cid, wk);
+  var weeks = await loadWeeks(cid);
+  // clear the export cache so they can re-export after resubmitting
+  try { localStorage.removeItem('tw_exp_'+wk); } catch(e){}
+  set({screen:'main', wd:wd, weeks:weeks, li:li});
+}
+
+async function doEditEntry() {
+  // Load current answers back into form for editing
+  var li=ST.li, wd=ST.wd;
+  var currentAns = li===0 ? wd.a0 : wd.a1;
+  // Pre-populate form with existing answers
+  var ans = emptyA();
+  if(currentAns) {
+    ['appreciation','loved','attraction','deep','improve','future','open'].forEach(function(k){
+      if(currentAns[k] !== undefined) ans[k] = currentAns[k];
+    });
+  }
+  set({screen:'form', step:0, ans:ans});
+}
+
+function drawEmailPrompt() {
+  return '<div style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:24px;">'+
+    '<div style="background:#000;border:1px solid rgba(255,255,255,0.15);padding:36px;width:100%;max-width:400px;">'+
+    '<div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:10px;">Email Summary</div>'+
+    '<h2 style="font-weight:700;font-size:clamp(22px,6vw,32px);line-height:0.95;letter-spacing:-0.02em;text-transform:uppercase;color:#fff;margin-bottom:20px;">Send this<br>week\'s reveal</h2>'+
+    '<div style="height:1px;background:rgba(255,255,255,0.1);margin-bottom:24px;"></div>'+
+    '<p style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.5);font-size:13px;line-height:1.7;margin-bottom:20px;">Enter the email address to send your check-in summary to.</p>'+
+    '<input id="emailInput" type="email" placeholder="email@example.com" style="background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.3);padding:10px 0;color:#fff;font-size:15px;outline:none;width:100%;margin-bottom:6px;"/>'+
+    '<div id="emailErr" style="font-size:12px;color:rgba(255,80,60,0.8);font-family:Georgia,serif;font-style:italic;display:none;margin-bottom:12px;">Please enter a valid email address.</div>'+
+    '<div style="display:flex;gap:12px;margin-top:24px;">'+
+    '<button onclick="set({showEmailPrompt:false,pendingExport:null})" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.2);padding:13px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">Skip</button>'+
+    '<button onclick="submitEmailExport()" style="flex:2;background:#E8FF6B;border:none;padding:13px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">Send →</button>'+
+    '</div></div></div>';
+}
+
+function drawBanner() {
+  return '<div class="banner"><div style="display:flex;justify-content:space-between;align-items:center;"><div class="banner-title">✓ Check-in complete</div><button onclick="set({expDone:false})" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:22px;cursor:pointer;">×</button></div>'+
+    (ST.mailto?'<a href="'+ST.mailto+'" class="email-btn">Email Summary →</a>':'')+
+    '</div>';
+}
+
+// BIND
+function bindInputs() {
+  document.querySelectorAll('input[type=text],textarea').forEach(function(el) {
+    el.addEventListener('focus', function(){el.style.borderBottomColor='#fff';});
+    el.addEventListener('blur',  function(){el.style.borderBottomColor='rgba(255,255,255,0.2)';});
+    var sec = QS[ST.step];
+    if (el.dataset.p && sec && sec.max) {
+      el.addEventListener('input', function() {
+        var cc = document.getElementById('cc');
+        if (cc) cc.textContent = el.value.length + '/' + sec.max;
+        if (el.value.length > sec.max) el.value = el.value.slice(0, sec.max);
+      });
+    }
+  });
+}
+
+// ACTIONS
+function setTab(i) { stopPoll(); set({tab:i}); }
+function doSwitch() { stopPoll(); set({li:null, screen:'main'}); }
+function goSetup() { set({screen:'setup'}); }
+function chkS() {
+  var p0=document.getElementById('p0'), p1=document.getElementById('p1'), btn=document.getElementById('sBtn');
+  if(!p0||!p1||!btn)return;
+  var ok = p0.value.trim() && p1.value.trim();
+  btn.disabled = !ok;
+  btn.style.background = ok ? '#fff' : 'rgba(255,255,255,0.15)';
+  btn.style.color = ok ? '#000' : 'rgba(255,255,255,0.3)';
+}
+async function doSetup() {
+  var p0=document.getElementById('p0').value.trim();
+  var p1=document.getElementById('p1').value.trim();
+  if(!p0||!p1)return;
+  var btn=document.getElementById('sBtn'), err=document.getElementById('sErr');
+  btn.textContent='Connecting…'; btn.disabled=true;
+  var cid = mkCid(p0,p1);
+  var res = await sbPost('couples', {couple_id:cid, name0:p0, name1:p1});
+  if (res===null) {
+    err.textContent='Could not connect to database. Please try again.'; err.style.display='block';
+    btn.textContent='Continue'; btn.disabled=false; return;
+  }
+  var names=[p0,p1];
+  lsSet('tw_names',names); lsSet('tw_cid',cid);
+  set({screen:'loading'});
+  var wk=getWeek();
+  var wd=await loadWk(cid,wk), weeks=await loadWeeks(cid);
+  set({screen:'main', names:names, cid:cid, wd:wd, weeks:weeks, tab:0});
+}
+function doLogin(i) {
+  var sub = i===0 ? (ST.wd&&ST.wd.a0) : (ST.wd&&ST.wd.a1);
+  set({li:i, screen:sub?'waiting':'form', step:0, ans:emptyA()});
+  if (sub) startPoll();
+}
+function fBack() { stopPoll(); set({li:null, screen:'main'}); }
+function fPrev() { var a=collectA(); set({ans:a, step:ST.step-1}); }
+function collectA() {
+  var a = JSON.parse(JSON.stringify(ST.ans));
+  var sec = QS[ST.step];
+  if (sec.type==='bullets') {
+    document.querySelectorAll('[data-b]').forEach(function(el){
+      var parts=el.dataset.b.split(':'), id=parts[0], i=parseInt(parts[1]);
+      a[id][i]=el.value;
+    });
+  } else {
+    var el=document.querySelector('[data-p]');
+    if(el) a[el.dataset.p]=el.value;
+  }
+  return a;
+}
+async function fNext() {
+  var a=collectA(), sec=QS[ST.step];
+  if (sec.req) {
+    var v=a[sec.id];
+    var empty = Array.isArray(v) ? !v.every(function(x){return x.trim();}) : !v.trim();
+    if (empty) {
+      var fe=document.getElementById('ferr'); if(fe)fe.style.display='block';
+      set({ans:a}); return;
+    }
+  }
+  if (ST.step < QS.length-1) { set({ans:a, step:ST.step+1}); return; }
+  var nb=document.getElementById('nb');
+  if(nb){nb.textContent='Saving…';nb.disabled=true;}
+  var cid=ST.cid, wk=getWeek(), li=ST.li;
+  var res = await saveWk(cid, wk, li, a);
+  if (res===null) {
+    if(nb){nb.textContent='Submit';nb.disabled=false;}
+    alert('Save failed. Please check your connection and try again.'); return;
+  }
+  var wd=await loadWk(cid,wk);
+  var weeks=ST.weeks.indexOf(wk)>=0?ST.weeks:[wk].concat(ST.weeks);
+  if(wd&&wd.a0&&wd.a1){
+    doExport(ST.names,[wd.a0,wd.a1],wk);
+    set({wd:wd,weeks:weeks,screen:'main',tab:1,li:li});
+  } else {
+    set({wd:wd,weeks:weeks,screen:'waiting',li:li});
+    startPoll();
+  }
+}
+async function togArch(wk) {
+  ST.archExp[wk] = !ST.archExp[wk];
+  if (ST.archExp[wk] && !ST.archCache[wk]) {
+    draw();
+    var wd = await loadWk(ST.cid, wk);
+    ST.archCache[wk] = wd || {};
+  }
+  draw();
+}
+function buildTxt(names,ans,wk) {
+  var t='TWOGETHER — WEEKLY CHECK-IN\n'+wkLabel(wk)+'\n'+'─'.repeat(40)+'\n\n';
+  QS.forEach(function(sec){
+    var empty=function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
+    if(empty(ans[0]&&ans[0][sec.id])&&empty(ans[1]&&ans[1][sec.id]))return;
+    t+=sec.num+' — '+sec.label.toUpperCase()+'\n\n';
+    [0,1].forEach(function(pi){
+      t+=names[pi].toUpperCase()+'\n';
+      var v=ans[pi]&&ans[pi][sec.id];
+      if(Array.isArray(v))v.filter(function(x){return x&&x.trim();}).forEach(function(x){t+='  · '+x+'\n';});
+      else t+='  '+(v&&v.trim()||'—')+'\n';
+      t+='\n';
+    });
+    t+='─'.repeat(40)+'\n\n';
+  });
+  return t+'Archived '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+}
+function buildHtmlEmail(names,ans,wk) {
+  var wl=wkLabel(wk);
+  var rows='';
+  QS.forEach(function(sec){
+    var empty=function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
+    if(empty(ans[0]&&ans[0][sec.id])&&empty(ans[1]&&ans[1][sec.id]))return;
+    var cols=[0,1].map(function(pi){
+      var val=ans[pi]&&ans[pi][sec.id];
+      var content='';
+      if(Array.isArray(val)){val.filter(function(v){return v&&v.trim();}).forEach(function(v){content+='<div style="display:flex;gap:10px;margin-bottom:8px;"><span style="color:#666;flex-shrink:0;">&#8212;</span><span style="font-family:Georgia,serif;font-style:italic;color:#333;font-size:14px;line-height:1.6;">'+v+'</span></div>';});}
+      else{content='<p style="font-family:Georgia,serif;font-style:italic;color:'+(val&&val.trim()?'#333':'#999')+';font-size:14px;line-height:1.7;margin:0;">'+(val&&val.trim()||'&#8212;')+'</p>';}
+      return '<td style="width:50%;vertical-align:top;padding:0 '+(pi===0?'12px 0 0':'0 0 0 12px')+';">'+(pi===0?'<div style="border-right:1px solid #eee;padding-right:12px;">'+content+'</div>':content)+'</td>';
+    }).join('');
+    rows+='<tr><td colspan="2" style="padding:20px 0 8px;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#999;">'+sec.num+' &#8212; '+sec.label+'</span></td></tr>';
+    rows+='<tr><td colspan="2"><table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'+cols+'</tr></table></td></tr>';
+    rows+='<tr><td colspan="2" style="border-bottom:1px solid #f0f0f0;padding-bottom:8px;padding-top:8px;"></td></tr>';
+  });
+  var nameHdrs=names.map(function(n){return '<td style="width:50%;font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#000;padding:14px 0;">'+n+'</td>';}).join('');
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0;background:#f5f5f5;font-family:Helvetica Neue,Arial,sans-serif;"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 20px;"><tr><td align="center"><table width="560" cellpadding="0" cellspacing="0" style="background:#000;"><tr><td style="padding:40px 40px 32px;"><div style="font-size:11px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;color:#fff;margin-bottom:12px;">Twogether</div><div style="font-weight:700;font-size:40px;line-height:0.92;letter-spacing:-0.02em;text-transform:uppercase;color:#fff;margin-bottom:16px;">THIS<br>WEEK\'S<br>REVEAL</div><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.4);">'+wl+'</div></td></tr><tr><td style="background:#fff;padding:32px 40px 40px;"><table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'+nameHdrs+'</tr><tr><td colspan="2" style="border-bottom:2px solid #000;padding-bottom:0;"></td></tr>'+rows+'</table><div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#ccc;">Archived '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+'</div></td></tr></table></td></tr></table></body></html>';
+}
+
+function doExport(names,ans,wk) {
+  if(lsGet('tw_exp_'+wk)) return;
+  set({showEmailPrompt:true, pendingExport:{names:names,ans:ans,wk:wk}});
+}
+
+function submitEmailExport() {
+  var emailEl=document.getElementById('emailInput');
+  var email=emailEl?emailEl.value.trim():'';
+  if(!email||!email.includes('@')){var err=document.getElementById('emailErr');if(err)err.style.display='block';return;}
+  var pe=ST.pendingExport;
+  var html=buildHtmlEmail(pe.names,pe.ans,pe.wk);
+  var sub=encodeURIComponent('Twogether \u2014 '+wkLabel(pe.wk));
+  var body=encodeURIComponent(html);
+  lsSet('tw_exp_'+pe.wk,{at:new Date().toISOString()});
+  set({showEmailPrompt:false,pendingExport:null,expDone:true,mailto:'mailto:'+email+'?subject='+sub+'&body='+body});
+}
+</script>
+</body>
+</html>
