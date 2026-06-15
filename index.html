@@ -9,13 +9,14 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#000;color:#fff;font-family:'Helvetica Neue',Arial,sans-serif;min-height:100vh;}
-input,textarea{-webkit-appearance:none;border-radius:0;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.2);padding:10px 0;color:#fff;font-size:15px;outline:none;width:100%;}
-textarea{font-family:Georgia,serif;font-style:italic;font-size:14px;resize:none;line-height:1.7;}
+input,textarea{-webkit-appearance:none;border-radius:0;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);padding:12px 14px;color:#fff;font-size:15px;outline:none;width:100%;transition:border-color 0.15s ease,background 0.15s ease;}
+input:focus,textarea:focus{border-color:#fff;background:rgba(255,255,255,0.06);}
+textarea{font-family:Georgia,serif;font-style:italic;font-size:14px;resize:none;line-height:1.7;overflow:hidden;}
 button{cursor:pointer;}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:0.2}50%{opacity:0.9}}
 .spin{width:24px;height:24px;border:2px solid rgba(255,255,255,0.1);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;}
-nav{position:sticky;top:0;z-index:10;background:rgba(0,0,0,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.1);padding:0 24px;display:flex;justify-content:space-between;align-items:center;height:52px;}
+nav{position:sticky;top:0;z-index:10;background:rgba(0,0,0,0.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.1);padding:env(safe-area-inset-top) 24px 0;display:flex;justify-content:space-between;align-items:center;height:52px;}
 nav span{font-size:11px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;}
 .tabs{display:flex;gap:20px;}
 .tab{background:none;border:none;border-bottom:2px solid transparent;padding:4px 0;color:rgba(255,255,255,0.4);font-size:10px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;}
@@ -45,10 +46,19 @@ h2{font-weight:700;font-size:clamp(26px,7vw,40px);line-height:0.95;letter-spacin
 .waiting-dots{display:flex;gap:6px;margin-top:20px;}
 .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.4);}
 .err{color:rgba(255,80,60,0.9);font-family:Georgia,serif;font-style:italic;font-size:13px;margin-top:10px;display:none;}
-.banner{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.97);border-top:2px solid #E8FF6B;padding:20px 24px;z-index:100;}
+.banner{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.97);border-top:2px solid #E8FF6B;padding:20px 24px calc(20px + env(safe-area-inset-bottom));z-index:100;}
 .banner-title{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#E8FF6B;margin-bottom:6px;}
 .email-btn{display:inline-block;background:#E8FF6B;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:12px 24px;text-decoration:none;margin-top:10px;}
 .center{display:flex;align-items:center;justify-content:center;height:80vh;flex-direction:column;gap:16px;}
+.pname{display:none;font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:8px;}
+@media(max-width:599px){
+  input[type=text],textarea{font-size:16px!important;}
+  .reveal-grid{grid-template-columns:1fr;gap:0;}
+  .ans-col{border-right:none!important;padding-right:0!important;}
+  .ans-col + .ans-col{margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);}
+  .names-header{display:none;}
+  .pname{display:block;}
+}
 </style>
 </head>
 <body>
@@ -264,10 +274,10 @@ function drawForm() {
   var inp='';
   if (sec.type==='bullets') {
     inp = s.ans[sec.id].map(function(v,i){
-      return '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;"><span style="font-size:10px;color:rgba(255,255,255,0.25);min-width:16px;">'+(i+1)+'</span><input type="text" value="'+esc(v)+'" data-b="'+sec.id+':'+i+'" placeholder="Moment '+(i+1)+'" style="flex:1;"/></div>';
+      return '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;"><span style="font-size:10px;color:rgba(255,255,255,0.25);min-width:16px;padding-top:15px;">'+(i+1)+'</span><textarea data-b="'+sec.id+':'+i+'" rows="1" placeholder="Moment '+(i+1)+'" style="flex:1;font-family:\'Helvetica Neue\',Arial,sans-serif;font-style:normal;font-size:15px;line-height:1.5;min-height:0;">'+esc(v)+'</textarea></div>';
     }).join('');
   } else {
-    inp = '<textarea data-p="'+sec.id+'" rows="4" placeholder="Write here…">'+esc(s.ans[sec.id])+'</textarea>';
+    inp = '<textarea data-p="'+sec.id+'" rows="3" placeholder="Write here…" style="min-height:104px;">'+esc(s.ans[sec.id])+'</textarea>';
     if (sec.hint) inp += '<div style="font-size:9px;font-style:italic;color:rgba(255,255,255,0.3);margin-top:6px;">'+sec.hint+'</div>';
     if (sec.max) inp += '<div style="font-size:9px;color:rgba(255,255,255,0.2);margin-top:4px;" id="cc">'+s.ans[sec.id].length+'/'+sec.max+'</div>';
   }
@@ -308,11 +318,11 @@ function drawReveal() {
       }
       return '<p class="reveal-text" style="margin:0;color:'+(val&&val.trim()?'rgba(255,255,255,0.75)':'rgba(255,255,255,0.2)')+';">'+esc((val&&val.trim())||'—')+'</p>';
     });
-    return '<div class="reveal-section"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);">'+cols[0]+'</div><div>'+cols[1]+'</div></div></div>';
+    return '<div class="reveal-section"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col" style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
   }).join('');
   return '<div class="page"><span class="label">'+wkLabel(getWeek())+'</span><h2>This<br>Week\'s<br>Reveal</h2>'+
     '<div class="divider"></div>'+
-    '<div class="reveal-grid" style="padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.1);">'+
+    '<div class="reveal-grid names-header" style="padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.1);">'+
     s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+
     '</div>'+rows+'</div>';
 }
@@ -334,7 +344,7 @@ function drawArchive() {
       else if (data.a0&&data.a1) {
         var a=[data.a0,data.a1];
         var empty = function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
-        inner = '<div style="padding-bottom:8px;"><div class="reveal-grid" style="margin-bottom:12px;padding-top:4px;">'+s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+'</div>'+
+        inner = '<div style="padding-bottom:8px;"><div class="reveal-grid names-header" style="margin-bottom:12px;padding-top:4px;">'+s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+'</div>'+
           QS.map(function(sec){
             if(empty(a[0]&&a[0][sec.id])&&empty(a[1]&&a[1][sec.id]))return'';
             var cols=[0,1].map(function(pi){
@@ -342,7 +352,7 @@ function drawArchive() {
               if(Array.isArray(val))return val.filter(function(v){return v&&v.trim();}).map(function(v){return '<div class="bullet-row"><span class="bullet-dash">—</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.6);font-size:12px;line-height:1.6;">'+esc(v)+'</span></div>';}).join('');
               return '<p style="font-family:Georgia,serif;font-style:italic;color:'+(val&&val.trim()?'rgba(255,255,255,0.6)':'rgba(255,255,255,0.2)')+';font-size:12px;line-height:1.6;margin:0;">'+esc((val&&val.trim())||'—')+'</p>';
             });
-            return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid">'+cols[0]+cols[1]+'</div></div>';
+            return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
           }).join('')+'</div>';
       } else { inner = '<p class="italic" style="padding:12px 0 20px;">Incomplete — awaiting both partners.</p>'; }
     }
@@ -368,8 +378,6 @@ function drawBanner() {
 // BIND
 function bindInputs() {
   document.querySelectorAll('input[type=text],textarea').forEach(function(el) {
-    el.addEventListener('focus', function(){el.style.borderBottomColor='#fff';});
-    el.addEventListener('blur',  function(){el.style.borderBottomColor='rgba(255,255,255,0.2)';});
     var sec = QS[ST.step];
     if (el.dataset.p && sec && sec.max) {
       el.addEventListener('input', function() {
@@ -378,6 +386,11 @@ function bindInputs() {
         if (el.value.length > sec.max) el.value = el.value.slice(0, sec.max);
       });
     }
+  });
+  document.querySelectorAll('textarea').forEach(function(t) {
+    var fit = function(){ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; };
+    fit();
+    t.addEventListener('input', fit);
   });
 }
 
