@@ -95,7 +95,7 @@ async function sbPost(table, data) {
 
 // QUESTIONS
 var QS = [
-  {id:'appreciation',label:'Appreciation',num:'01',q:'What are 3 things your partner did this week that you loved?',type:'bullets',req:true},
+  {id:'appreciation',label:'Appreciation',num:'01',q:'What are 3 things your partner did this week that you loved?',type:'bullets',req:true,retired:true},
   {id:'loved',label:'Feeling Loved',num:'02',q:'What are 3 things your partner did that made you feel loved or cared for?',type:'bullets',req:true},
   {id:'attraction',label:'Admiration',num:'03',q:'What are 3 moments you felt attracted to, proud of, or admired your partner?',type:'bullets',req:true,hint:'Playful, emotional, physical — all welcome.'},
   {id:'deep',label:'Deep Appreciation',num:'04',q:'What is one thing you deeply appreciate about your partner right now?',type:'para',req:true,max:300},
@@ -103,6 +103,9 @@ var QS = [
   {id:'future',label:'Next Week',num:'06',q:'What is one thing you want to prioritize together next week?',type:'para',req:true},
   {id:'open',label:'Anything Else',num:'07',q:'Anything else you want to say?',type:'para',req:false,hint:'Optional.'},
 ];
+// Questions still asked in the check-in form. Retired questions stay in QS (so the
+// Archive/Reveal/export can still render past answers) but are excluded from the form.
+var FORM_QS = QS.filter(function(q){ return !q.retired; });
 function emptyA() { return {appreciation:['','',''],loved:['','',''],attraction:['','',''],deep:'',improve:'',future:'',open:''}; }
 
 // WEEK
@@ -269,8 +272,8 @@ function drawLogin() {
 }
 
 function drawForm() {
-  var s=ST, sec=QS[s.step];
-  var pct = Math.round(((s.step+1)/QS.length)*100);
+  var s=ST, sec=FORM_QS[s.step];
+  var pct = Math.round(((s.step+1)/FORM_QS.length)*100);
   var inp='';
   if (sec.type==='bullets') {
     inp = s.ans[sec.id].map(function(v,i){
@@ -285,7 +288,7 @@ function drawForm() {
     '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:0;">'+
     '<button onclick="fBack()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;">← Back</button>'+
     '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(s.names[s.li])+'</span>'+
-    '<span style="font-size:10px;color:rgba(255,255,255,0.38);">'+(s.step+1)+' / '+QS.length+'</span></div>'+
+    '<span style="font-size:10px;color:rgba(255,255,255,0.38);">'+(s.step+1)+' / '+FORM_QS.length+'</span></div>'+
     '<div class="progress"><div class="progress-fill" style="width:'+pct+'%;"></div></div>'+
     '<span class="label">'+sec.num+' — '+sec.label+(sec.req?'':' (optional)')+'</span>'+
     '<h2 style="font-size:clamp(18px,4.5vw,24px);margin-bottom:24px;">'+sec.q+'</h2>'+
@@ -293,7 +296,7 @@ function drawForm() {
     '<div class="err" id="ferr">This field is required.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:36px;">'+
     (s.step>0?'<button onclick="fPrev()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;">← Prev</button>':'<div></div>')+
-    '<button id="nb" onclick="fNext()" style="background:#fff;border:none;padding:13px 28px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">'+(s.step===QS.length-1?'Submit':'Next →')+'</button>'+
+    '<button id="nb" onclick="fNext()" style="background:#fff;border:none;padding:13px 28px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">'+(s.step===FORM_QS.length-1?'Submit':'Next →')+'</button>'+
     '</div></div>';
 }
 
@@ -378,7 +381,7 @@ function drawBanner() {
 // BIND
 function bindInputs() {
   document.querySelectorAll('input[type=text],textarea').forEach(function(el) {
-    var sec = QS[ST.step];
+    var sec = FORM_QS[ST.step];
     if (el.dataset.p && sec && sec.max) {
       el.addEventListener('input', function() {
         var cc = document.getElementById('cc');
@@ -434,7 +437,7 @@ function fBack() { stopPoll(); set({li:null, screen:'main'}); }
 function fPrev() { var a=collectA(); set({ans:a, step:ST.step-1}); }
 function collectA() {
   var a = JSON.parse(JSON.stringify(ST.ans));
-  var sec = QS[ST.step];
+  var sec = FORM_QS[ST.step];
   if (sec.type==='bullets') {
     document.querySelectorAll('[data-b]').forEach(function(el){
       var parts=el.dataset.b.split(':'), id=parts[0], i=parseInt(parts[1]);
@@ -447,7 +450,7 @@ function collectA() {
   return a;
 }
 async function fNext() {
-  var a=collectA(), sec=QS[ST.step];
+  var a=collectA(), sec=FORM_QS[ST.step];
   if (sec.req) {
     var v=a[sec.id];
     var empty = Array.isArray(v) ? !v.every(function(x){return x.trim();}) : !v.trim();
@@ -456,7 +459,7 @@ async function fNext() {
       set({ans:a}); return;
     }
   }
-  if (ST.step < QS.length-1) { set({ans:a, step:ST.step+1}); return; }
+  if (ST.step < FORM_QS.length-1) { set({ans:a, step:ST.step+1}); return; }
   var nb=document.getElementById('nb');
   if(nb){nb.textContent='Saving…';nb.disabled=true;}
   var cid=ST.cid, wk=getWeek(), li=ST.li;
