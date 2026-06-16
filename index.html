@@ -233,7 +233,7 @@ function draw() {
   }
 
   root.innerHTML = drawNav(s.tab, both) + 
-    (s.li!==null ? '<div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">As <strong style="color:#fff">'+esc(s.names[s.li])+'</strong></span><button onclick="doSwitch()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Switch</button></div>' : '') +
+    (s.li!==null ? '<div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">As <strong style="color:#fff">'+esc(s.names[s.li])+'</strong></span>'+(s.screen!=='form'?'<button onclick="doSwitch()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Switch</button>':'')+'</div>' : '') +
     '<div style="max-width:560px;margin:0 auto;">' + content + '</div>' +
     (s.expDone ? drawBanner() : '');
   bindInputs();
@@ -290,7 +290,7 @@ function drawForm() {
     '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(s.names[s.li])+'</span>'+
     '<span style="font-size:10px;color:rgba(255,255,255,0.38);">'+(s.step+1)+' / '+FORM_QS.length+'</span></div>'+
     '<div class="progress"><div class="progress-fill" style="width:'+pct+'%;"></div></div>'+
-    '<span class="label">'+sec.num+' — '+sec.label+(sec.req?'':' (optional)')+'</span>'+
+    '<span class="label">'+String(s.step+1).padStart(2,'0')+' — '+sec.label+(sec.req?'':' (optional)')+'</span>'+
     '<h2 style="font-size:clamp(18px,4.5vw,24px);margin-bottom:24px;">'+sec.q+'</h2>'+
     '<div id="finp">'+inp+'</div>'+
     '<div class="err" id="ferr">This field is required.</div>'+
@@ -311,9 +311,11 @@ function drawWaiting() {
 
 function drawReveal() {
   var s=ST, a=[s.wd.a0,s.wd.a1];
+  var n = 0;
   var rows = QS.map(function(sec) {
     var empty = function(v) { return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim()); };
     if (empty(a[0]&&a[0][sec.id]) && empty(a[1]&&a[1][sec.id])) return '';
+    n++; var num = String(n).padStart(2,'0');
     var cols = [0,1].map(function(pi) {
       var val = a[pi] && a[pi][sec.id];
       if (Array.isArray(val)) {
@@ -321,7 +323,7 @@ function drawReveal() {
       }
       return '<p class="reveal-text" style="margin:0;color:'+(val&&val.trim()?'rgba(255,255,255,0.75)':'rgba(255,255,255,0.2)')+';">'+esc((val&&val.trim())||'—')+'</p>';
     });
-    return '<div class="reveal-section"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col" style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
+    return '<div class="reveal-section"><div class="reveal-label">'+num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col" style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
   }).join('');
   return '<div class="page"><span class="label">'+wkLabel(getWeek())+'</span><h2>This<br>Week\'s<br>Reveal</h2>'+
     '<div class="divider"></div>'+
@@ -347,15 +349,22 @@ function drawArchive() {
       else if (data.a0&&data.a1) {
         var a=[data.a0,data.a1];
         var empty = function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
-        inner = '<div style="padding-bottom:8px;"><div class="reveal-grid names-header" style="margin-bottom:12px;padding-top:4px;">'+s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+'</div>'+
-          QS.map(function(sec){
-            if(empty(a[0]&&a[0][sec.id])&&empty(a[1]&&a[1][sec.id]))return'';
-            var cols=[0,1].map(function(pi){
+        var shown = QS.filter(function(sec){ return !(empty(a[0]&&a[0][sec.id])&&empty(a[1]&&a[1][sec.id])); });
+        inner = '<div style="padding-bottom:8px;">'+
+          [0,1].map(function(pi){
+            var body = shown.map(function(sec,idx){
+              var num=String(idx+1).padStart(2,'0');
               var val=a[pi]&&a[pi][sec.id];
-              if(Array.isArray(val))return val.filter(function(v){return v&&v.trim();}).map(function(v){return '<div class="bullet-row"><span class="bullet-dash">—</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.6);font-size:12px;line-height:1.6;">'+esc(v)+'</span></div>';}).join('');
-              return '<p style="font-family:Georgia,serif;font-style:italic;color:'+(val&&val.trim()?'rgba(255,255,255,0.6)':'rgba(255,255,255,0.2)')+';font-size:12px;line-height:1.6;margin:0;">'+esc((val&&val.trim())||'—')+'</p>';
-            });
-            return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
+              var content;
+              if(Array.isArray(val)){
+                var items=val.filter(function(v){return v&&v.trim();});
+                content = items.length ? items.map(function(v){return '<div class="bullet-row"><span class="bullet-dash">—</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.65);font-size:13px;line-height:1.65;">'+esc(v)+'</span></div>';}).join('') : '<p style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.2);font-size:13px;line-height:1.65;margin:0;">—</p>';
+              } else {
+                content = '<p style="font-family:Georgia,serif;font-style:italic;color:'+(val&&val.trim()?'rgba(255,255,255,0.65)':'rgba(255,255,255,0.2)')+';font-size:13px;line-height:1.65;margin:0;">'+esc((val&&val.trim())||'—')+'</p>';
+              }
+              return '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label" style="margin-bottom:8px;">'+num+' — '+sec.label+'</div>'+content+'</div>';
+            }).join('');
+            return '<div style="margin-bottom:28px;"><div style="font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;margin-bottom:16px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,0.18);">'+esc(s.names[pi])+'</div>'+body+'</div>';
           }).join('')+'</div>';
       } else { inner = '<p class="italic" style="padding:12px 0 20px;">Incomplete — awaiting both partners.</p>'; }
     }
@@ -489,10 +498,12 @@ async function togArch(wk) {
 }
 function buildTxt(names,ans,wk) {
   var t='TWOGETHER — WEEKLY CHECK-IN\n'+wkLabel(wk)+'\n'+'─'.repeat(40)+'\n\n';
+  var n=0;
   QS.forEach(function(sec){
     var empty=function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
     if(empty(ans[0]&&ans[0][sec.id])&&empty(ans[1]&&ans[1][sec.id]))return;
-    t+=sec.num+' — '+sec.label.toUpperCase()+'\n\n';
+    n++;
+    t+=String(n).padStart(2,'0')+' — '+sec.label.toUpperCase()+'\n\n';
     [0,1].forEach(function(pi){
       t+=names[pi].toUpperCase()+'\n';
       var v=ans[pi]&&ans[pi][sec.id];
