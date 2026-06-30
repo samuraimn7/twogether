@@ -1,0 +1,8 @@
+{
+  "appId": "space.twogether.app",
+  "appName": "Twogether",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always"
+  }
+}

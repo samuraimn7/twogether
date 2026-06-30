@@ -1,0 +1,16 @@
+# Node
+node_modules/
+
+# Capacitor build output (regenerated from index.html via `npm run build:web`)
+www/
+
+# iOS / CocoaPods
+ios/App/Pods/
+ios/App/App/public/
+ios/App/build/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store

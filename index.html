@@ -63,39 +63,58 @@ h2{font-weight:700;font-size:clamp(26px,7vw,40px);line-height:0.95;letter-spacin
 </head>
 <body>
 <div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // CONFIG
 var SURL = 'https://kpzeahhwldycfgaxlvsx.supabase.co';
 var SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwemVhaGh3bGR5Y2ZnYXhsdnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzQ0MDAsImV4cCI6MjA5MjMxMDQwMH0.czEq-f5EhaiP2mD-XHdz2BZ08sqkeCv_HO8cbKu77ZM';
 var EMAIL = 'Ninanaclay0306@gmail.com';
+// Dev-only guest sign-in: visible only when the URL has ?dev (never for real users).
+var DEV = /[?&]dev(=|&|$)/.test(location.search);
 
-// SUPABASE
-function sbHeaders() {
-  return {'apikey':SKEY,'Authorization':'Bearer '+SKEY,'Content-Type':'application/json','Accept':'application/json'};
+// SUPABASE (auth + RLS-enforced data)
+var sb = window.supabase.createClient(SURL, SKEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
+function isNative(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+function authRedirect(){ return isNative() ? 'space.twogether.app://auth-callback' : (window.location.origin + window.location.pathname); }
+function signInGoogle(){ sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: authRedirect() } }); }
+function signInApple(){ sb.auth.signInWithOAuth({ provider:'apple', options:{ redirectTo: authRedirect() } }); }
+function signInEmail(email){ return sb.auth.signInWithOtp({ email:email, options:{ emailRedirectTo: authRedirect() } }); }
+function signInGuest(){ sb.auth.signInAnonymously().then(function(r){ if(r&&r.error){ var e=document.getElementById('authErr'); if(e){e.textContent='Guest sign-in is off. Enable Anonymous sign-ins in Supabase.';e.style.display='block';} } }); }
+async function signOut(){ try{ await sb.auth.signOut(); }catch(e){} ST.user=null;ST.couple=null;ST.cid=null;ST.myIndex=null;ST.names=null;ST.li=null;ST.wd=null;ST.weeks=[];ST.justMatched=false;stopPoll();stopPairPoll();set({screen:'auth'}); }
+
+// who is the signed-in user paired with?
+async function loadCouple(){
+  var mine = await sb.from('couple_members').select('couple_id,partner_index,display_name').eq('user_id', ST.user.id).limit(1);
+  if (mine.error || !mine.data || !mine.data.length) return null;
+  var cid = mine.data[0].couple_id;
+  var mem = await sb.from('couple_members').select('partner_index,display_name').eq('couple_id', cid);
+  var names=['',''];
+  (mem.data||[]).forEach(function(m){ names[m.partner_index]=m.display_name||''; });
+  names[0]=names[0]||'Partner 1'; names[1]=names[1]||'Partner 2';
+  var cpl = await sb.from('couples').select('id,invite_code,locked').eq('id', cid).single();
+  return { cid:cid, myIndex:mine.data[0].partner_index, names:names, couple:cpl.data };
 }
-async function sbGet(table, q) {
-  try {
-    var r = await fetch(SURL+'/rest/v1/'+table+'?'+(q||''), {headers:sbHeaders()});
-    if (!r.ok) { console.error('GET fail', r.status, await r.text()); return null; }
-    return await r.json();
-  } catch(e) { console.error('GET err', e); return null; }
+async function createCouple(name){
+  var r = await sb.rpc('create_couple', { p_name:name });
+  if (r.error){ console.error('create_couple', r.error); return null; }
+  return r.data;
 }
-async function sbPost(table, data) {
-  try {
-    var r = await fetch(SURL+'/rest/v1/'+table, {
-      method:'POST',
-      headers:Object.assign({}, sbHeaders(), {'Prefer':'resolution=merge-duplicates,return=representation'}),
-      body:JSON.stringify(data)
-    });
-    var text = await r.text();
-    if (!r.ok) { console.error('POST fail', r.status, text); return null; }
-    return text ? JSON.parse(text) : [];
-  } catch(e) { console.error('POST err', e); return null; }
+async function joinCouple(code, name){
+  var r = await sb.rpc('join_couple', { p_code:code, p_name:name });
+  if (r.error){ var msg=(r.error.message||'').toLowerCase(); var key=['invalid_code','couple_locked','couple_full','already_in_couple'].find(function(k){return msg.indexOf(k)>=0;}); return { error: key||'join_failed' }; }
+  return { couple:r.data };
+}
+// Bring this user's old (name-keyed) check-ins into the new couple. Runs once per couple.
+async function claimLegacy(){
+  if (!ST.cid) return;
+  var key='tw_claimed_'+ST.cid;
+  if (lsGet(key)) return;
+  try { await sb.rpc('claim_legacy_history'); lsSet(key, true); } catch(e){ console.error('claimLegacy', e); }
 }
 
 // QUESTIONS
 var QS = [
-  {id:'appreciation',label:'Appreciation',num:'01',q:'What are 3 things your partner did this week that you loved?',type:'bullets',req:true},
+  {id:'appreciation',label:'Appreciation',num:'01',q:'What are 3 things your partner did this week that you loved?',type:'bullets',req:true,retired:true},
   {id:'loved',label:'Feeling Loved',num:'02',q:'What are 3 things your partner did that made you feel loved or cared for?',type:'bullets',req:true},
   {id:'attraction',label:'Admiration',num:'03',q:'What are 3 moments you felt attracted to, proud of, or admired your partner?',type:'bullets',req:true,hint:'Playful, emotional, physical — all welcome.'},
   {id:'deep',label:'Deep Appreciation',num:'04',q:'What is one thing you deeply appreciate about your partner right now?',type:'para',req:true,max:300},
@@ -103,6 +122,9 @@ var QS = [
   {id:'future',label:'Next Week',num:'06',q:'What is one thing you want to prioritize together next week?',type:'para',req:true},
   {id:'open',label:'Anything Else',num:'07',q:'Anything else you want to say?',type:'para',req:false,hint:'Optional.'},
 ];
+// Questions still asked in the check-in form. Retired questions stay in QS (so the
+// Archive/Reveal/export can still render past answers) but are excluded from the form.
+var FORM_QS = QS.filter(function(q){ return !q.retired; });
 function emptyA() { return {appreciation:['','',''],loved:['','',''],attraction:['','',''],deep:'',improve:'',future:'',open:''}; }
 
 // WEEK
@@ -136,8 +158,11 @@ function mkCid(a,b) { return [a,b].map(function(n){return n.toLowerCase().trim()
 var ST = {
   screen: 'loading',
   tab: 0,
-  names: lsGet('tw_names'),
-  cid: lsGet('tw_cid'),
+  user: null,
+  couple: null,
+  cid: null,
+  myIndex: null,
+  names: null,
   li: null,
   wd: null,
   weeks: [],
@@ -146,6 +171,8 @@ var ST = {
   expDone: false,
   mailto: null,
   poll: null,
+  pairPoll: null,
+  justMatched: false,
   archExp: {},
   archCache: {}
 };
@@ -157,24 +184,22 @@ function set(patch) {
 
 // DATA
 async function loadWk(cid, wk) {
-  var rows = await sbGet('checkins', 'couple_id=eq.'+cid+'&iso_week=eq.'+wk+'&select=partner_index,answers,submitted_at');
-  if (!rows || !rows.length) return null;
+  var r = await sb.from('checkins').select('partner_index,answers,submitted_at').eq('couple_id',cid).eq('iso_week',wk);
+  if (r.error || !r.data || !r.data.length) return null;
   var d = {};
-  rows.forEach(function(r) {
-    d['a'+r.partner_index] = r.answers;
-    d['t'+r.partner_index] = r.submitted_at;
-  });
+  r.data.forEach(function(row) { d['a'+row.partner_index]=row.answers; d['t'+row.partner_index]=row.submitted_at; });
   return d;
 }
 async function loadWeeks(cid) {
-  var rows = await sbGet('checkins', 'couple_id=eq.'+cid+'&select=iso_week&order=iso_week.desc');
-  if (!rows) return [];
-  var seen = {}, out = [];
-  rows.forEach(function(r) { if(!seen[r.iso_week]){seen[r.iso_week]=1;out.push(r.iso_week);} });
+  var r = await sb.from('checkins').select('iso_week').eq('couple_id',cid).order('iso_week',{ascending:false});
+  if (r.error || !r.data) return [];
+  var seen={},out=[]; r.data.forEach(function(row){ if(!seen[row.iso_week]){seen[row.iso_week]=1;out.push(row.iso_week);} });
   return out;
 }
 async function saveWk(cid, wk, pi, ans) {
-  return sbPost('checkins', {couple_id:cid, iso_week:wk, partner_index:pi, answers:ans, submitted_at:new Date().toISOString()});
+  var r = await sb.from('checkins').upsert({couple_id:cid, iso_week:wk, partner_index:pi, user_id:ST.user.id, answers:ans, submitted_at:new Date().toISOString()}, {onConflict:'couple_id,iso_week,partner_index'}).select();
+  if (r.error){ console.error('saveWk', r.error); return null; }
+  return r.data;
 }
 
 function startPoll() {
@@ -190,19 +215,54 @@ function startPoll() {
 }
 function stopPoll() { if (ST.poll) { clearInterval(ST.poll); ST.poll = null; } }
 
+// Watch for the partner joining; the moment the couple locks, celebrate the match.
+function startPairPoll() {
+  stopPairPoll();
+  ST.pairPoll = setInterval(async function() {
+    if (!ST.cid || (ST.couple && ST.couple.locked)) { stopPairPoll(); return; }
+    var cpl = await sb.from('couples').select('id,invite_code,locked').eq('id', ST.cid).single();
+    if (cpl.data && cpl.data.locked) {
+      stopPairPoll();
+      var mem = await sb.from('couple_members').select('partner_index,display_name').eq('couple_id', ST.cid);
+      var names=['','']; (mem.data||[]).forEach(function(m){ names[m.partner_index]=m.display_name||''; });
+      names[0]=names[0]||'Partner 1'; names[1]=names[1]||'Partner 2';
+      ST.couple = cpl.data; ST.names = names;
+      await claimLegacy();
+      set({screen:'matched'});
+    }
+  }, 4000);
+}
+function stopPairPoll() { if (ST.pairPoll) { clearInterval(ST.pairPoll); ST.pairPoll = null; } }
+
 // BOOT
 async function boot() {
   try {
-    if (!ST.names || !ST.cid) { set({screen:'welcome'}); return; }
+    var sess = await sb.auth.getSession();
+    var session = sess.data ? sess.data.session : null;
+    if (!session) { set({screen:'auth'}); return; }
+    ST.user = session.user;
+    var c = await loadCouple();
+    if (!c) { set({screen:'pair'}); return; }
+    ST.cid=c.cid; ST.couple=c.couple; ST.myIndex=c.myIndex; ST.li=c.myIndex; ST.names=c.names;
+    if (c.couple && c.couple.locked) { await claimLegacy(); }
     var wk = getWeek();
-    var wd = await loadWk(ST.cid, wk);
-    var weeks = await loadWeeks(ST.cid);
+    var wd = await loadWk(c.cid, wk);
+    var weeks = await loadWeeks(c.cid);
+    if (ST.justMatched && c.couple && c.couple.locked) {
+      ST.justMatched = false;
+      set({screen:'matched', wd:wd, weeks:weeks, tab:0});
+      return;
+    }
     set({screen:'main', wd:wd, weeks:weeks, tab:0});
+    if (c.couple && !c.couple.locked) startPairPoll();
   } catch(e) {
     console.error('boot', e);
-    set({screen:'welcome'});
+    set({screen:'auth'});
   }
 }
+sb.auth.onAuthStateChange(function(evt, session){
+  if (evt==='SIGNED_IN' && session && ST.screen==='auth') { ST.user=session.user; boot(); }
+});
 // RENDER HELPERS
 function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
 var root = document.getElementById('root');
@@ -212,25 +272,26 @@ boot();
 function draw() {
   var s = ST;
   if (s.screen === 'loading') { root.innerHTML = '<div class="center"><div class="spin"></div><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.3);">Connecting</span></div>'; return; }
-  if (s.screen === 'welcome') { root.innerHTML = drawWelcome(); return; }
-  if (s.screen === 'setup')   { root.innerHTML = drawSetup();   return; }
+  if (s.screen === 'auth')   { root.innerHTML = drawAuth();   return; }
+  if (s.screen === 'pair')   { root.innerHTML = drawPair();   return; }
+  if (s.screen === 'invite') { root.innerHTML = drawInvite(); return; }
+  if (s.screen === 'matched') { root.innerHTML = drawMatched(); return; }
 
   var s0=!!(s.wd&&s.wd.a0), s1=!!(s.wd&&s.wd.a1), both=s0&&s1;
-  var mySub = s.li!==null ? (s.li===0?s0:s1) : false;
+  var mySub = s.myIndex!==null ? (s.myIndex===0?s0:s1) : false;
   var content = '';
   if (s.tab===0) {
-    if (s.li===null) content = drawLogin();
-    else if (s.screen==='form') content = drawForm();
-    else if (mySub) content = drawWaiting();
-    else content = drawForm();
+    content = mySub ? drawWaiting() : drawForm();
   } else if (s.tab===1) {
     content = both ? drawReveal() : drawRevealLocked();
   } else {
     content = drawArchive();
   }
 
-  root.innerHTML = drawNav(s.tab, both) + 
-    (s.li!==null ? '<div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">As <strong style="color:#fff">'+esc(s.names[s.li])+'</strong></span><button onclick="doSwitch()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Switch</button></div>' : '') +
+  var unlocked = s.couple && !s.couple.locked;
+  root.innerHTML = drawNav(s.tab, both) +
+    '<div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">As <strong style="color:#fff">'+esc(s.names?s.names[s.myIndex]:'')+'</strong></span><button onclick="doSignOut()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Sign out</button></div>' +
+    (unlocked ? '<div style="padding:10px 24px;background:rgba(232,255,107,0.07);border-bottom:1px solid rgba(232,255,107,0.2);font-size:11px;color:#E8FF6B;text-align:center;letter-spacing:0.04em;">Waiting for your partner — share code <strong>'+esc(s.couple.invite_code)+'</strong></div>' : '') +
     '<div style="max-width:560px;margin:0 auto;">' + content + '</div>' +
     (s.expDone ? drawBanner() : '');
   bindInputs();
@@ -245,19 +306,45 @@ function drawNav(tab, both) {
   return '<nav><span>Twogether</span><div class="tabs">'+btns+'</div></nav>';
 }
 
-function drawWelcome() {
-  return '<div class="page"><h1>TWO<br>GETHER</h1><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:20px;">Weekly Check-In · Cloud Synced</div><div class="divider"></div><p class="italic" style="margin:20px 0;">A private ritual for two. Each partner fills out independently — answers reveal only when both have submitted.</p><div class="divider"></div>'+
-    [['Appreciation','What you loved'],['Connection','Feeling cared for'],['Admiration','Pride & attraction'],['Growth','One thing to improve'],['Next Week','Priorities together']].map(function(x){return '<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);"><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+x[0]+'</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.38);font-size:12px;">'+x[1]+'</span></div>';}).join('') +
-    '<button class="btn" onclick="goSetup()">Begin</button></div>';
+function drawAuth() {
+  return '<div class="page"><h1>TWO<br>GETHER</h1><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:20px;">A private ritual for two</div><div class="divider"></div><p class="italic" style="margin:20px 0;">Sign in to begin. Your answers stay private until both of you submit.</p>'+
+    '<button class="btn" onclick="signInApple()">Continue with Apple</button>'+
+    '<button class="btn-ghost" onclick="signInGoogle()">Continue with Google</button>'+
+    '<div class="divider"></div>'+
+    '<label class="label">Or sign in with email</label>'+
+    '<input id="authEmail" type="text" inputmode="email" placeholder="you@email.com" style="margin-top:8px;"/>'+
+    '<button class="btn-ghost" onclick="doEmail()">Email me a sign-in link</button>'+
+    (DEV ? '<button class="btn-ghost" onclick="signInGuest()" style="border-color:#E8FF6B;color:#E8FF6B;margin-top:20px;">Continue as guest · dev</button>' : '')+
+    '<div class="err" id="authErr"></div>'+
+    '<div id="authMsg" style="font-family:Georgia,serif;font-style:italic;color:#E8FF6B;font-size:13px;margin-top:12px;display:none;"></div></div>';
 }
 
-function drawSetup() {
-  return '<div class="page"><span class="label">First time setup</span><h2>Who\'s in<br>this couple?</h2><div class="divider"></div><p class="italic" style="margin-bottom:24px;">Use the <strong style="color:#fff;">exact same names</strong> on both phones — this links you together.</p>'+
-    '<div style="margin-bottom:20px;"><label class="label">Partner 1</label><input id="p0" type="text" placeholder="Name" oninput="chkS()"/></div>'+
-    '<div style="margin-bottom:20px;"><label class="label">Partner 2</label><input id="p1" type="text" placeholder="Name" oninput="chkS()"/></div>'+
-    '<button class="btn" id="sBtn" onclick="doSetup()" disabled>Continue</button>'+
-    '<div class="err" id="sErr"></div></div>';
+function drawPair() {
+  return '<div class="page"><span class="label">Connect</span><h2>Pair with<br>your partner</h2><div class="divider"></div><p class="italic" style="margin-bottom:8px;">Start a new space, or join your partner with their invite code.</p>'+
+    '<div style="font-size:11px;color:rgba(255,255,255,0.32);font-family:Georgia,serif;font-style:italic;margin-bottom:4px;">Pairing is permanent — one account, one partner, for life.</div>'+
+    '<div style="margin:18px 0;"><label class="label">Your name</label><input id="pairName" type="text" placeholder="Your name" style="margin-top:8px;"/></div>'+
+    '<button class="btn" onclick="doCreate()">Create a new space</button>'+
+    '<div class="divider"></div>'+
+    '<label class="label">Got a code from your partner?</label>'+
+    '<input id="joinCode" type="text" placeholder="6-character code" style="margin-top:8px;text-transform:uppercase;letter-spacing:0.2em;"/>'+
+    '<button class="btn-ghost" onclick="doJoin()">Join my partner</button>'+
+    '<div class="err" id="pairErr"></div>'+
+    '<button onclick="doSignOut()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;margin-top:28px;cursor:pointer;">Sign out</button></div>';
 }
+
+function drawInvite() {
+  var code = ST.couple ? ST.couple.invite_code : '';
+  return '<div class="page"><span class="label">Your space is ready</span><h2>Invite<br>your partner</h2><div class="divider"></div><p class="italic">Share this code with your partner. When they join, your space locks to just the two of you.</p>'+
+    '<div style="font-size:38px;font-weight:700;letter-spacing:0.28em;text-align:center;margin:30px 0 24px;color:#E8FF6B;">'+esc(code)+'</div>'+
+    '<button class="btn" onclick="copyCode(\''+esc(code)+'\')">Copy code</button>'+
+    '<button class="btn-ghost" onclick="goMain()">Continue to check-in →</button></div>';
+}
+
+function drawMatched() {
+  var s=ST, me=s.names?s.names[s.myIndex]:'', partner=s.names?s.names[s.myIndex===0?1:0]:'';
+  return '<div class="page"><div style="font-size:56px;line-height:1;margin:18px 0 18px;">∞</div><span class="label">You\'re connected</span><h2>'+esc(me)+' &amp;<br>'+esc(partner)+'</h2><div class="divider"></div><p class="italic">You\'re paired — for good. One account, one partner, for life. Time for your first weekly check-in together.</p><button class="btn" onclick="goStartCheckin()">Start our first check-in →</button></div>';
+}
+function goStartCheckin() { boot(); }
 
 function drawLogin() {
   var s=ST, s0=!!(s.wd&&s.wd.a0), s1=!!(s.wd&&s.wd.a1);
@@ -269,8 +356,8 @@ function drawLogin() {
 }
 
 function drawForm() {
-  var s=ST, sec=QS[s.step];
-  var pct = Math.round(((s.step+1)/QS.length)*100);
+  var s=ST, sec=FORM_QS[s.step];
+  var pct = Math.round(((s.step+1)/FORM_QS.length)*100);
   var inp='';
   if (sec.type==='bullets') {
     inp = s.ans[sec.id].map(function(v,i){
@@ -283,17 +370,17 @@ function drawForm() {
   }
   return '<div class="page" style="padding-top:0;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:0;">'+
-    '<button onclick="fBack()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;">← Back</button>'+
+    '<span></span>'+
     '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(s.names[s.li])+'</span>'+
-    '<span style="font-size:10px;color:rgba(255,255,255,0.38);">'+(s.step+1)+' / '+QS.length+'</span></div>'+
+    '<span style="font-size:10px;color:rgba(255,255,255,0.38);">'+(s.step+1)+' / '+FORM_QS.length+'</span></div>'+
     '<div class="progress"><div class="progress-fill" style="width:'+pct+'%;"></div></div>'+
-    '<span class="label">'+sec.num+' — '+sec.label+(sec.req?'':' (optional)')+'</span>'+
+    '<span class="label">'+String(s.step+1).padStart(2,'0')+' — '+sec.label+(sec.req?'':' (optional)')+'</span>'+
     '<h2 style="font-size:clamp(18px,4.5vw,24px);margin-bottom:24px;">'+sec.q+'</h2>'+
     '<div id="finp">'+inp+'</div>'+
     '<div class="err" id="ferr">This field is required.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:36px;">'+
     (s.step>0?'<button onclick="fPrev()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;">← Prev</button>':'<div></div>')+
-    '<button id="nb" onclick="fNext()" style="background:#fff;border:none;padding:13px 28px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">'+(s.step===QS.length-1?'Submit':'Next →')+'</button>'+
+    '<button id="nb" onclick="fNext()" style="background:#fff;border:none;padding:13px 28px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">'+(s.step===FORM_QS.length-1?'Submit':'Next →')+'</button>'+
     '</div></div>';
 }
 
@@ -308,9 +395,11 @@ function drawWaiting() {
 
 function drawReveal() {
   var s=ST, a=[s.wd.a0,s.wd.a1];
+  var n = 0;
   var rows = QS.map(function(sec) {
     var empty = function(v) { return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim()); };
     if (empty(a[0]&&a[0][sec.id]) && empty(a[1]&&a[1][sec.id])) return '';
+    n++; var num = String(n).padStart(2,'0');
     var cols = [0,1].map(function(pi) {
       var val = a[pi] && a[pi][sec.id];
       if (Array.isArray(val)) {
@@ -318,7 +407,7 @@ function drawReveal() {
       }
       return '<p class="reveal-text" style="margin:0;color:'+(val&&val.trim()?'rgba(255,255,255,0.75)':'rgba(255,255,255,0.2)')+';">'+esc((val&&val.trim())||'—')+'</p>';
     });
-    return '<div class="reveal-section"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col" style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
+    return '<div class="reveal-section"><div class="reveal-label">'+num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col" style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
   }).join('');
   return '<div class="page"><span class="label">'+wkLabel(getWeek())+'</span><h2>This<br>Week\'s<br>Reveal</h2>'+
     '<div class="divider"></div>'+
@@ -344,15 +433,22 @@ function drawArchive() {
       else if (data.a0&&data.a1) {
         var a=[data.a0,data.a1];
         var empty = function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
-        inner = '<div style="padding-bottom:8px;"><div class="reveal-grid names-header" style="margin-bottom:12px;padding-top:4px;">'+s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+'</div>'+
-          QS.map(function(sec){
-            if(empty(a[0]&&a[0][sec.id])&&empty(a[1]&&a[1][sec.id]))return'';
-            var cols=[0,1].map(function(pi){
+        var shown = QS.filter(function(sec){ return !(empty(a[0]&&a[0][sec.id])&&empty(a[1]&&a[1][sec.id])); });
+        inner = '<div style="padding-bottom:8px;">'+
+          [0,1].map(function(pi){
+            var body = shown.map(function(sec,idx){
+              var num=String(idx+1).padStart(2,'0');
               var val=a[pi]&&a[pi][sec.id];
-              if(Array.isArray(val))return val.filter(function(v){return v&&v.trim();}).map(function(v){return '<div class="bullet-row"><span class="bullet-dash">—</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.6);font-size:12px;line-height:1.6;">'+esc(v)+'</span></div>';}).join('');
-              return '<p style="font-family:Georgia,serif;font-style:italic;color:'+(val&&val.trim()?'rgba(255,255,255,0.6)':'rgba(255,255,255,0.2)')+';font-size:12px;line-height:1.6;margin:0;">'+esc((val&&val.trim())||'—')+'</p>';
-            });
-            return '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label">'+sec.num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
+              var content;
+              if(Array.isArray(val)){
+                var items=val.filter(function(v){return v&&v.trim();});
+                content = items.length ? items.map(function(v){return '<div class="bullet-row"><span class="bullet-dash">—</span><span style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.65);font-size:13px;line-height:1.65;">'+esc(v)+'</span></div>';}).join('') : '<p style="font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.2);font-size:13px;line-height:1.65;margin:0;">—</p>';
+              } else {
+                content = '<p style="font-family:Georgia,serif;font-style:italic;color:'+(val&&val.trim()?'rgba(255,255,255,0.65)':'rgba(255,255,255,0.2)')+';font-size:13px;line-height:1.65;margin:0;">'+esc((val&&val.trim())||'—')+'</p>';
+              }
+              return '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label" style="margin-bottom:8px;">'+num+' — '+sec.label+'</div>'+content+'</div>';
+            }).join('');
+            return '<div style="margin-bottom:28px;"><div style="font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;margin-bottom:16px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,0.18);">'+esc(s.names[pi])+'</div>'+body+'</div>';
           }).join('')+'</div>';
       } else { inner = '<p class="italic" style="padding:12px 0 20px;">Incomplete — awaiting both partners.</p>'; }
     }
@@ -378,7 +474,7 @@ function drawBanner() {
 // BIND
 function bindInputs() {
   document.querySelectorAll('input[type=text],textarea').forEach(function(el) {
-    var sec = QS[ST.step];
+    var sec = FORM_QS[ST.step];
     if (el.dataset.p && sec && sec.max) {
       el.addEventListener('input', function() {
         var cc = document.getElementById('cc');
@@ -396,45 +492,42 @@ function bindInputs() {
 
 // ACTIONS
 function setTab(i) { stopPoll(); set({tab:i}); }
-function doSwitch() { stopPoll(); set({li:null, screen:'main'}); }
-function goSetup() { set({screen:'setup'}); }
-function chkS() {
-  var p0=document.getElementById('p0'), p1=document.getElementById('p1'), btn=document.getElementById('sBtn');
-  if(!p0||!p1||!btn)return;
-  var ok = p0.value.trim() && p1.value.trim();
-  btn.disabled = !ok;
-  btn.style.background = ok ? '#fff' : 'rgba(255,255,255,0.15)';
-  btn.style.color = ok ? '#000' : 'rgba(255,255,255,0.3)';
+function doSignOut() { signOut(); }
+function doEmail() {
+  var el=document.getElementById('authEmail'), err=document.getElementById('authErr'), msg=document.getElementById('authMsg');
+  var email=el?el.value.trim():''; if(err)err.style.display='none';
+  if(!email||email.indexOf('@')<1){ if(err){err.textContent='Enter a valid email address.';err.style.display='block';} return; }
+  signInEmail(email).then(function(r){
+    if(r && r.error){ if(err){err.textContent='Could not send the link. Try again.';err.style.display='block';} return; }
+    if(msg){ msg.textContent='Check your email for a sign-in link.'; msg.style.display='block'; }
+  });
 }
-async function doSetup() {
-  var p0=document.getElementById('p0').value.trim();
-  var p1=document.getElementById('p1').value.trim();
-  if(!p0||!p1)return;
-  var btn=document.getElementById('sBtn'), err=document.getElementById('sErr');
-  btn.textContent='Connecting…'; btn.disabled=true;
-  var cid = mkCid(p0,p1);
-  var res = await sbPost('couples', {couple_id:cid, name0:p0, name1:p1});
-  if (res===null) {
-    err.textContent='Could not connect to database. Please try again.'; err.style.display='block';
-    btn.textContent='Continue'; btn.disabled=false; return;
-  }
-  var names=[p0,p1];
-  lsSet('tw_names',names); lsSet('tw_cid',cid);
-  set({screen:'loading'});
-  var wk=getWeek();
-  var wd=await loadWk(cid,wk), weeks=await loadWeeks(cid);
-  set({screen:'main', names:names, cid:cid, wd:wd, weeks:weeks, tab:0});
+async function doCreate() {
+  var name=(document.getElementById('pairName').value||'').trim(), err=document.getElementById('pairErr');
+  if(err)err.style.display='none';
+  if(!name){ if(err){err.textContent='Enter your name first.';err.style.display='block';} return; }
+  var c=await createCouple(name);
+  if(!c){ if(err){err.textContent='Could not create your space. Try again.';err.style.display='block';} return; }
+  ST.couple=c; ST.myIndex=0; ST.li=0; ST.names=[name,'Partner 2']; set({screen:'invite'});
 }
-function doLogin(i) {
-  var sub = i===0 ? (ST.wd&&ST.wd.a0) : (ST.wd&&ST.wd.a1);
-  set({li:i, screen:sub?'waiting':'form', step:0, ans:emptyA()});
-  if (sub) startPoll();
+async function doJoin() {
+  var name=(document.getElementById('pairName').value||'').trim();
+  var code=(document.getElementById('joinCode').value||'').trim();
+  var err=document.getElementById('pairErr'); if(err)err.style.display='none';
+  if(!name){ if(err){err.textContent='Enter your name first.';err.style.display='block';} return; }
+  if(!code){ if(err){err.textContent="Enter your partner's code.";err.style.display='block';} return; }
+  var r=await joinCouple(code, name);
+  if(r.error){ var m={invalid_code:"That code doesn't match any space.",couple_locked:'That space is already full.',couple_full:'That space is already full.',already_in_couple:"You're already paired."}; if(err){err.textContent=(m[r.error]||'Could not join. Check the code and try again.');err.style.display='block';} return; }
+  ST.justMatched = true;
+  boot();
 }
-function fBack() { stopPoll(); set({li:null, screen:'main'}); }
+function copyCode(c) { try{ if(navigator.clipboard) navigator.clipboard.writeText(c); }catch(e){} }
+function goMain() { boot(); }
+function fBack() { stopPoll(); set({tab:0}); }
 function fPrev() { var a=collectA(); set({ans:a, step:ST.step-1}); }
 function collectA() {
   var a = JSON.parse(JSON.stringify(ST.ans));
-  var sec = QS[ST.step];
+  var sec = FORM_QS[ST.step];
   if (sec.type==='bullets') {
     document.querySelectorAll('[data-b]').forEach(function(el){
       var parts=el.dataset.b.split(':'), id=parts[0], i=parseInt(parts[1]);
@@ -447,7 +540,7 @@ function collectA() {
   return a;
 }
 async function fNext() {
-  var a=collectA(), sec=QS[ST.step];
+  var a=collectA(), sec=FORM_QS[ST.step];
   if (sec.req) {
     var v=a[sec.id];
     var empty = Array.isArray(v) ? !v.every(function(x){return x.trim();}) : !v.trim();
@@ -456,7 +549,7 @@ async function fNext() {
       set({ans:a}); return;
     }
   }
-  if (ST.step < QS.length-1) { set({ans:a, step:ST.step+1}); return; }
+  if (ST.step < FORM_QS.length-1) { set({ans:a, step:ST.step+1}); return; }
   var nb=document.getElementById('nb');
   if(nb){nb.textContent='Saving…';nb.disabled=true;}
   var cid=ST.cid, wk=getWeek(), li=ST.li;
@@ -486,10 +579,12 @@ async function togArch(wk) {
 }
 function buildTxt(names,ans,wk) {
   var t='TWOGETHER — WEEKLY CHECK-IN\n'+wkLabel(wk)+'\n'+'─'.repeat(40)+'\n\n';
+  var n=0;
   QS.forEach(function(sec){
     var empty=function(v){return !v||(Array.isArray(v)?v.every(function(x){return !x||!x.trim();}):!v.trim());};
     if(empty(ans[0]&&ans[0][sec.id])&&empty(ans[1]&&ans[1][sec.id]))return;
-    t+=sec.num+' — '+sec.label.toUpperCase()+'\n\n';
+    n++;
+    t+=String(n).padStart(2,'0')+' — '+sec.label.toUpperCase()+'\n\n';
     [0,1].forEach(function(pi){
       t+=names[pi].toUpperCase()+'\n';
       var v=ans[pi]&&ans[pi][sec.id];
