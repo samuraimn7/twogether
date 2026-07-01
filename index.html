@@ -153,19 +153,40 @@ function wkLabel(wk) {
 // STORAGE
 function lsGet(k) { try { var v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch(e){return null;} }
 function lsSet(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch(e){} }
-// In-progress check-in drafts (per couple, per week, per partner) — never lose work.
-function draftKey() { return 'tw_draft_'+ST.cid+'_'+getWeek()+'_'+ST.myIndex; }
+// In-progress check-in draft — one per couple+partner, persists across weeks until submitted.
+function draftKey() { return 'tw_draft_'+ST.cid+'_'+ST.myIndex; }
 function saveDraft(a) { if (ST.cid!=null && ST.myIndex!=null) lsSet(draftKey(), a||ST.ans); }
-function loadDraft() { if (ST.cid==null || ST.myIndex==null) return null; return lsGet(draftKey()); }
-function clearDraft() { try { localStorage.removeItem(draftKey()); } catch(e){} }
-function hasDraftContent() {
-  var d = loadDraft(); if (!d) return false;
+function draftHasContent(d) {
+  if (!d) return false;
   for (var k in d) { var v=d[k];
-    if (Array.isArray(v)) { if (v.some(function(x){return x&&x.trim();})) return true; }
+    if (Array.isArray(v)) { if (v.some(function(x){return x && String(x).trim();})) return true; }
     else if (v && String(v).trim()) return true;
   }
   return false;
 }
+function loadDraft() {
+  if (ST.cid==null || ST.myIndex==null) return null;
+  var d = lsGet(draftKey());
+  if (d && draftHasContent(d)) return d;
+  // recover a stranded draft saved on this device under an older week/couple key
+  var suf = '_'+ST.myIndex;
+  for (var i=0;i<localStorage.length;i++) {
+    var k = localStorage.key(i);
+    if (k && k.indexOf('tw_draft_')===0 && k.slice(-suf.length)===suf && k!==draftKey()) {
+      var od = lsGet(k);
+      if (od && draftHasContent(od)) { lsSet(draftKey(), od); return od; }
+    }
+  }
+  return d || null;
+}
+function clearDraft() {
+  try {
+    var suf = '_'+ST.myIndex, rm = [];
+    for (var i=0;i<localStorage.length;i++) { var k = localStorage.key(i); if (k && k.indexOf('tw_draft_')===0 && k.slice(-suf.length)===suf) rm.push(k); }
+    rm.forEach(function(k){ localStorage.removeItem(k); });
+  } catch(e){}
+}
+function hasDraftContent() { return draftHasContent(loadDraft()); }
 function mkCid(a,b) { return [a,b].map(function(n){return n.toLowerCase().trim();}).sort().join('_').replace(/\s+/g,''); }
 
 // STATE
@@ -329,7 +350,8 @@ async function boot() {
     var weeks = await loadWeeks(c.cid);
     await loadStatus();
     var mySubmitted = (c.myIndex===0 ? (wd&&wd.a0) : (wd&&wd.a1));
-    ST.ans = (!mySubmitted && loadDraft()) || emptyA();
+    var _draft = mySubmitted ? null : loadDraft();
+    ST.ans = _draft ? Object.assign(emptyA(), _draft) : emptyA();
     if (ST.justMatched && c.couple && c.couple.locked) {
       ST.justMatched = false;
       set({screen:'matched', wd:wd, weeks:weeks, tab:0});
@@ -495,7 +517,7 @@ function drawLobby() {
   else msg = 'Select your name to check in. Answers stay private until you both submit.';
   return '<div class="page"><div style="display:flex;justify-content:space-between;margin-bottom:28px;"><span class="label">Week of</span><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+wkLabel(wk)+'</span></div><div class="divider"></div><p class="italic" style="margin:20px 0;">'+msg+'</p>'+rows+'</div>';
 }
-function startForm() { set({screen:'form', step:0}); }
+function startForm() { var d=loadDraft(); if (d) ST.ans = Object.assign(emptyA(), d); set({screen:'form', step:0}); }
 
 function drawWaiting() {
   var s=ST, pn=s.names[s.li===0?1:0];
