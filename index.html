@@ -176,6 +176,8 @@ var ST = {
   expDone: false,
   mailto: null,
   poll: null,
+  statusPoll: null,
+  weekStatus: null,
   pairPoll: null,
   justMatched: false,
   archExp: {},
@@ -220,6 +222,37 @@ function startPoll() {
 }
 function stopPoll() { if (ST.poll) { clearInterval(ST.poll); ST.poll = null; } }
 
+// Who has checked in this week (booleans only — no answers, which stay private till both submit)
+async function loadStatus() {
+  var st = {0:false, 1:false};
+  try {
+    var r = await sb.rpc('week_status', { wk: getWeek() });
+    if (r && r.data) r.data.forEach(function(row){ st[row.partner_index] = row.submitted; });
+  } catch(e) { /* RPC not present yet — fall back to own status below */ }
+  var mine = ST.myIndex===0 ? (ST.wd&&ST.wd.a0) : (ST.wd&&ST.wd.a1);
+  if (mine) st[ST.myIndex] = true;
+  ST.weekStatus = st;
+}
+function refreshLobby() { loadStatus().then(function(){ if(ST.tab===0 && ST.screen!=='form') draw(); startStatusPoll(); }); }
+function startStatusPoll() {
+  stopStatusPoll();
+  ST.statusPoll = setInterval(async function() {
+    if (!ST.cid || ST.tab!==0 || ST.screen==='form') { stopStatusPoll(); return; }
+    var before = JSON.stringify(ST.weekStatus);
+    await loadStatus();
+    var st = ST.weekStatus || {};
+    var mySub = ST.myIndex===0 ? st[0] : st[1];
+    if (st[0] && st[1] && mySub) {   // both done and I've submitted → open reveal
+      stopStatusPoll();
+      var wd = await loadWk(ST.cid, getWeek());
+      set({wd:wd, tab:1, screen:'main'});
+      return;
+    }
+    if (JSON.stringify(ST.weekStatus) !== before) draw();
+  }, 5000);
+}
+function stopStatusPoll() { if (ST.statusPoll) { clearInterval(ST.statusPoll); ST.statusPoll = null; } }
+
 // Watch for the partner joining; the moment the couple locks, celebrate the match.
 function startPairPoll() {
   stopPairPoll();
@@ -251,6 +284,7 @@ async function boot() {
     var wk = getWeek();
     var wd = await loadWk(c.cid, wk);
     var weeks = await loadWeeks(c.cid);
+    await loadStatus();
     var mySubmitted = (c.myIndex===0 ? (wd&&wd.a0) : (wd&&wd.a1));
     ST.ans = (!mySubmitted && loadDraft()) || emptyA();
     if (ST.justMatched && c.couple && c.couple.locked) {
@@ -259,7 +293,7 @@ async function boot() {
       return;
     }
     set({screen:'main', wd:wd, weeks:weeks, tab:0});
-    if (c.couple && !c.couple.locked) startPairPoll();
+    if (c.couple && !c.couple.locked) startPairPoll(); else startStatusPoll();
   } catch(e) {
     console.error('boot', e);
     set({screen:'auth'});
@@ -286,7 +320,7 @@ function draw() {
   var mySub = s.myIndex!==null ? (s.myIndex===0?s0:s1) : false;
   var content = '';
   if (s.tab===0) {
-    content = mySub ? drawWaiting() : drawForm();
+    content = (s.screen==='form') ? drawForm() : drawLobby();
   } else if (s.tab===1) {
     content = both ? drawReveal() : drawRevealLocked();
   } else {
@@ -377,7 +411,7 @@ function drawForm() {
   }
   return '<div class="page" style="padding-top:0;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:0;">'+
-    '<span></span>'+
+    '<button onclick="fBack()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;">← Back</button>'+
     '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(s.names[s.li])+'</span>'+
     '<span style="font-size:10px;color:rgba(255,255,255,0.38);">'+(s.step+1)+' / '+FORM_QS.length+'</span></div>'+
     '<div class="progress"><div class="progress-fill" style="width:'+pct+'%;"></div></div>'+
@@ -390,6 +424,25 @@ function drawForm() {
     '<button id="nb" onclick="fNext()" style="background:#fff;border:none;padding:13px 28px;color:#000;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">'+(s.step===FORM_QS.length-1?'Submit':'Next →')+'</button>'+
     '</div></div>';
 }
+
+function drawLobby() {
+  var s=ST, wk=getWeek(), st=s.weekStatus||{0:false,1:false};
+  var partnerIdx=(s.myIndex===0?1:0), meDone=!!st[s.myIndex], partnerDone=!!st[partnerIdx];
+  var rows = (s.names||['','']).map(function(nm,i){
+    var done=!!st[i], isMe=(i===s.myIndex);
+    var badge = done ? '<span class="badge done">Done ✓</span>'
+                     : (isMe ? '<span class="badge todo">Check in →</span>' : '<span class="badge todo">Not yet</span>');
+    if (isMe && !done) return '<button class="person-btn" onclick="startForm()"><span class="person-name">'+esc(nm)+'</span>'+badge+'</button>';
+    return '<div class="person-btn" style="cursor:default;"><span class="person-name" style="'+(isMe?'':'color:rgba(255,255,255,0.6);')+'">'+esc(nm)+'</span>'+badge+'</div>';
+  }).join('');
+  var msg;
+  if (meDone && partnerDone) msg = 'You’ve both checked in — open the Reveal tab.';
+  else if (meDone) msg = 'You’re done. Waiting for '+esc(s.names[partnerIdx])+' to check in.';
+  else if (partnerDone) msg = esc(s.names[partnerIdx])+' has checked in. Your turn — answers stay private until you both submit.';
+  else msg = 'Select your name to check in. Answers stay private until you both submit.';
+  return '<div class="page"><div style="display:flex;justify-content:space-between;margin-bottom:28px;"><span class="label">Week of</span><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+wkLabel(wk)+'</span></div><div class="divider"></div><p class="italic" style="margin:20px 0;">'+msg+'</p>'+rows+'</div>';
+}
+function startForm() { set({screen:'form', step:0}); }
 
 function drawWaiting() {
   var s=ST, pn=s.names[s.li===0?1:0];
@@ -502,7 +555,7 @@ function bindInputs() {
 }
 
 // ACTIONS
-function setTab(i) { stopPoll(); set({tab:i}); }
+function setTab(i) { stopPoll(); stopStatusPoll(); ST.screen='main'; set({tab:i}); if(i===0) refreshLobby(); }
 function doSignOut() { signOut(); }
 function doEmail() {
   var el=document.getElementById('authEmail'), err=document.getElementById('authErr'), msg=document.getElementById('authMsg');
@@ -534,7 +587,7 @@ async function doJoin() {
 }
 function copyCode(c) { try{ if(navigator.clipboard) navigator.clipboard.writeText(c); }catch(e){} }
 function goMain() { boot(); }
-function fBack() { stopPoll(); set({tab:0}); }
+function fBack() { set({screen:'main', tab:0}); refreshLobby(); }
 function fPrev() { var a=collectA(); saveDraft(a); set({ans:a, step:ST.step-1}); }
 function collectA() {
   var a = JSON.parse(JSON.stringify(ST.ans));
@@ -573,12 +626,14 @@ async function fNext() {
   clearDraft();
   var wd=await loadWk(cid,wk);
   var weeks=ST.weeks.indexOf(wk)>=0?ST.weeks:[wk].concat(ST.weeks);
-  if(wd&&wd.a0&&wd.a1){
-    doExport(ST.names,[wd.a0,wd.a1],wk);
+  await loadStatus();
+  var st=ST.weekStatus||{};
+  if(st[0] && st[1]){
+    if(wd&&wd.a0&&wd.a1) doExport(ST.names,[wd.a0,wd.a1],wk);
     set({wd:wd,weeks:weeks,screen:'main',tab:1,li:li});
   } else {
-    set({wd:wd,weeks:weeks,screen:'waiting',li:li});
-    startPoll();
+    set({wd:wd,weeks:weeks,screen:'main',tab:0,li:li});
+    startStatusPoll();
   }
 }
 async function togArch(wk) {
