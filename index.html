@@ -328,7 +328,7 @@ function drawAuth() {
 
 function drawPair() {
   return '<div class="page"><span class="label">Connect</span><h2>Pair with<br>your partner</h2><div class="divider"></div><p class="italic" style="margin-bottom:8px;">Start a new space, or join your partner with their invite code.</p>'+
-    '<div style="font-size:11px;color:rgba(255,255,255,0.32);font-family:Georgia,serif;font-style:italic;margin-bottom:4px;">Pairing is permanent — one account, one partner, for life.</div>'+
+    '<div style="border:1px solid rgba(232,255,107,0.35);background:rgba(232,255,107,0.06);border-radius:2px;padding:13px 15px;margin-bottom:6px;font-family:Georgia,serif;font-style:italic;font-size:13px;color:rgba(255,255,255,0.78);line-height:1.6;">Pairing is permanent — one account, one partner, for life. <span style="color:#E8FF6B;font-style:normal;font-weight:700;letter-spacing:0.03em;">Forever.</span></div>'+
     '<div style="margin:18px 0;"><label class="label">Your name</label><input id="pairName" type="text" placeholder="Your name" style="margin-top:8px;"/></div>'+
     '<button class="btn" onclick="doCreate()">Create a new space</button>'+
     '<div class="divider"></div>'+
@@ -349,7 +349,7 @@ function drawInvite() {
 
 function drawMatched() {
   var s=ST, me=s.names?s.names[s.myIndex]:'', partner=s.names?s.names[s.myIndex===0?1:0]:'';
-  return '<div class="page"><div style="font-size:56px;line-height:1;margin:18px 0 18px;">∞</div><span class="label">You\'re connected</span><h2>'+esc(me)+' &amp;<br>'+esc(partner)+'</h2><div class="divider"></div><p class="italic">You\'re paired — for good. One account, one partner, for life. Time for your first weekly check-in together.</p><button class="btn" onclick="goStartCheckin()">Start our first check-in →</button></div>';
+  return '<div class="page"><div style="font-size:56px;line-height:1;margin:18px 0 18px;">∞</div><span class="label">You\'re connected</span><h2>'+esc(me)+' &amp;<br>'+esc(partner)+'</h2><div class="divider"></div><p class="italic">You\'re paired — one account, one partner, for life. <span style="color:#E8FF6B;font-style:normal;font-weight:700;">Forever.</span> Time for your first weekly check-in together.</p><button class="btn" onclick="goStartCheckin()">Start our first check-in →</button></div>';
 }
 function goStartCheckin() { boot(); }
 
