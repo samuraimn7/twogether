@@ -107,13 +107,10 @@ async function joinCouple(code, name){
   if (r.error){ var msg=(r.error.message||'').toLowerCase(); var key=['invalid_code','couple_locked','couple_full','already_in_couple'].find(function(k){return msg.indexOf(k)>=0;}); return { error: key||'join_failed' }; }
   return { couple:r.data };
 }
-// Bring this user's old (name-keyed) check-ins into the new couple. Runs once per couple.
-async function claimLegacy(){
-  if (!ST.cid) return;
-  var key='tw_claimed_'+ST.cid;
-  if (lsGet(key)) return;
-  try { await sb.rpc('claim_legacy_history'); lsSet(key, true); } catch(e){ console.error('claimLegacy', e); }
-}
+// Legacy auto-import removed: matching old data by name alone risks linking a
+// same-named couple's history. Identity is by account/email; legacy data (only
+// one real couple) is migrated explicitly, tied to each partner's email.
+async function claimLegacy(){ /* disabled by design */ }
 
 // QUESTIONS
 var QS = [
@@ -235,7 +232,6 @@ function startPairPoll() {
       var names=['','']; (mem.data||[]).forEach(function(m){ names[m.partner_index]=m.display_name||''; });
       names[0]=names[0]||'Partner 1'; names[1]=names[1]||'Partner 2';
       ST.couple = cpl.data; ST.names = names;
-      await claimLegacy();
       set({screen:'matched'});
     }
   }, 4000);
@@ -252,7 +248,6 @@ async function boot() {
     var c = await loadCouple();
     if (!c) { set({screen:'pair'}); return; }
     ST.cid=c.cid; ST.couple=c.couple; ST.myIndex=c.myIndex; ST.li=c.myIndex; ST.names=c.names;
-    if (c.couple && c.couple.locked) { await claimLegacy(); }
     var wk = getWeek();
     var wd = await loadWk(c.cid, wk);
     var weeks = await loadWeeks(c.cid);
