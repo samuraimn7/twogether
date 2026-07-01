@@ -73,7 +73,7 @@ var EMAIL = 'Ninanaclay0306@gmail.com';
 var DEV = /[?&]dev(=|&|$)/.test(location.search);
 // Which sign-in methods are live on the screen. Flip a flag to true the moment
 // that provider is configured in Supabase (Google is coming right after launch).
-var PROVIDERS = { apple:false, google:false, email:true };
+var PROVIDERS = { apple:false, google:true, email:true };
 
 // SUPABASE (auth + RLS-enforced data)
 var sb = window.supabase.createClient(SURL, SKEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
