@@ -125,7 +125,8 @@ var QS = [
 // Questions still asked in the check-in form. Retired questions stay in QS (so the
 // Archive/Reveal/export can still render past answers) but are excluded from the form.
 var FORM_QS = QS.filter(function(q){ return !q.retired; });
-function emptyA() { return {appreciation:['','',''],loved:['','',''],attraction:['','',''],deep:'',improve:'',future:'',open:''}; }
+FORM_QS.push({ id:'photos', label:'Photos', q:'Add up to 3 photos from this week', type:'photos', req:false });
+function emptyA() { return {appreciation:['','',''],loved:['','',''],attraction:['','',''],deep:'',improve:'',future:'',open:'',photos:[]}; }
 
 // WEEK
 function getWeek() {
@@ -186,6 +187,7 @@ var ST = {
   poll: null,
   statusPoll: null,
   weekStatus: null,
+  photoCache: {},
   pairPoll: null,
   justMatched: false,
   archExp: {},
@@ -203,8 +205,41 @@ async function loadWk(cid, wk) {
   if (r.error || !r.data || !r.data.length) return null;
   var d = {};
   r.data.forEach(function(row) { d['a'+row.partner_index]=row.answers; d['t'+row.partner_index]=row.submitted_at; });
+  await resolvePhotos(d);
   return d;
 }
+// --- photos (private Supabase Storage bucket "checkin-photos") ---
+async function resolvePhotos(d) {
+  var paths = [];
+  [d && d.a0, d && d.a1].forEach(function(a){
+    if (a && Array.isArray(a.photos)) a.photos.forEach(function(p){ if (p && !ST.photoCache[p]) paths.push(p); });
+  });
+  if (!paths.length) return;
+  try {
+    var r = await sb.storage.from('checkin-photos').createSignedUrls(paths, 3600);
+    if (r && r.data) r.data.forEach(function(x){ if (x.signedUrl) ST.photoCache[x.path] = x.signedUrl; });
+  } catch(e) { console.error('signedUrls', e); }
+}
+async function uploadPhoto(file) {
+  var ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')) || 'jpg';
+  var path = ST.cid + '/' + getWeek() + '/' + ST.myIndex + '/' + Date.now() + '-' + Math.floor(Math.random()*1e6) + '.' + ext;
+  var r = await sb.storage.from('checkin-photos').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
+  if (r.error) { console.error('upload', r.error); return null; }
+  return path;
+}
+async function onPhotos(input) {
+  ST.ans.photos = ST.ans.photos || [];
+  var files = Array.prototype.slice.call(input.files || []).slice(0, 3 - ST.ans.photos.length);
+  var err = document.getElementById('ferr');
+  for (var i=0;i<files.length;i++) {
+    var f = files[i], preview = URL.createObjectURL(f);
+    var path = await uploadPhoto(f);
+    if (path) { ST.ans.photos.push(path); ST.photoCache[path] = preview; saveDraft(ST.ans); }
+    else if (err) { err.textContent = 'Couldn’t upload — is photo storage set up in Supabase?'; err.style.display='block'; }
+  }
+  draw();
+}
+function removePhoto(i) { if (ST.ans.photos) { ST.ans.photos.splice(i,1); saveDraft(ST.ans); draw(); } }
 async function loadWeeks(cid) {
   var r = await sb.from('checkins').select('iso_week').eq('couple_id',cid).order('iso_week',{ascending:false});
   if (r.error || !r.data) return [];
@@ -412,6 +447,14 @@ function drawForm() {
     inp = s.ans[sec.id].map(function(v,i){
       return '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;"><span style="font-size:10px;color:rgba(255,255,255,0.25);min-width:16px;padding-top:15px;">'+(i+1)+'</span><textarea data-b="'+sec.id+':'+i+'" rows="1" placeholder="Moment '+(i+1)+'" style="flex:1;font-family:\'Helvetica Neue\',Arial,sans-serif;font-style:normal;font-size:15px;line-height:1.5;min-height:0;">'+esc(v)+'</textarea></div>';
     }).join('');
+  } else if (sec.type==='photos') {
+    var ph = s.ans.photos || [];
+    var thumbs = ph.map(function(p,i){
+      var url = ST.photoCache[p] || '';
+      return '<div style="position:relative;width:31%;padding-bottom:31%;border:1px solid rgba(255,255,255,0.15);overflow:hidden;background:rgba(255,255,255,0.03);"><img src="'+url+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"><button onclick="removePhoto('+i+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.75);border:none;color:#fff;width:24px;height:24px;font-size:15px;line-height:1;cursor:pointer;border-radius:2px;">×</button></div>';
+    }).join('');
+    var add = ph.length < 3 ? '<label style="width:31%;padding-bottom:31%;position:relative;border:1px dashed rgba(255,255,255,0.28);cursor:pointer;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.45);font-size:30px;">+</span><input type="file" accept="image/*" multiple onchange="onPhotos(this)" style="display:none;"></label>' : '';
+    inp = '<div style="display:flex;gap:3.5%;flex-wrap:wrap;">'+thumbs+add+'</div><div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:10px;">Up to 3 · optional · private until you both submit.</div>';
   } else {
     inp = '<textarea data-p="'+sec.id+'" rows="3" placeholder="Write here…" style="min-height:104px;">'+esc(s.ans[sec.id])+'</textarea>';
     if (sec.hint) inp += '<div style="font-size:9px;font-style:italic;color:rgba(255,255,255,0.3);margin-top:6px;">'+sec.hint+'</div>';
@@ -479,11 +522,18 @@ function drawReveal() {
     });
     return '<div class="reveal-section"><div class="reveal-label">'+num+' — '+sec.label+'</div><div class="reveal-grid"><div class="ans-col" style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);"><div class="pname">'+esc(s.names[0])+'</div>'+cols[0]+'</div><div class="ans-col"><div class="pname">'+esc(s.names[1])+'</div>'+cols[1]+'</div></div></div>';
   }).join('');
+  var photoSec = '';
+  if ((a[0]&&a[0].photos&&a[0].photos.length) || (a[1]&&a[1].photos&&a[1].photos.length)) {
+    photoSec = '<div class="reveal-section"><div class="reveal-label">Photos</div><div class="reveal-grid">'+[0,1].map(function(pi){
+      var ph=(a[pi]&&a[pi].photos)||[];
+      return '<div class="ans-col"'+(pi===0?' style="padding-right:12px;border-right:1px solid rgba(255,255,255,0.08);"':'')+'><div class="pname">'+esc(s.names[pi])+'</div>'+(ph.length?ph.map(function(p){return '<img src="'+(ST.photoCache[p]||'')+'" style="width:100%;border-radius:2px;margin-bottom:8px;display:block;">';}).join(''):'<p class="reveal-text" style="color:rgba(255,255,255,0.2);margin:0;">—</p>')+'</div>';
+    }).join('')+'</div></div>';
+  }
   return '<div class="page"><span class="label">'+wkLabel(getWeek())+'</span><h2>This<br>Week\'s<br>Reveal</h2>'+
     '<div class="divider"></div>'+
     '<div class="reveal-grid names-header" style="padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.1);">'+
     s.names.map(function(n){return '<span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+esc(n)+'</span>';}).join('')+
-    '</div>'+rows+'</div>';
+    '</div>'+rows+photoSec+'</div>';
 }
 
 function drawRevealLocked() {
@@ -518,7 +568,9 @@ function drawArchive() {
               }
               return '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.06);"><div class="reveal-label" style="margin-bottom:8px;">'+num+' — '+sec.label+'</div>'+content+'</div>';
             }).join('');
-            return '<div style="margin-bottom:28px;"><div style="font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;margin-bottom:16px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,0.18);">'+esc(s.names[pi])+'</div>'+body+'</div>';
+            var aph=(a[pi]&&a[pi].photos)||[];
+            var photoHtml = aph.length ? '<div style="display:flex;gap:2.5%;flex-wrap:wrap;margin-bottom:10px;">'+aph.map(function(p){return '<img src="'+(ST.photoCache[p]||'')+'" style="width:31.6%;border-radius:2px;display:block;">';}).join('')+'</div>' : '';
+            return '<div style="margin-bottom:28px;"><div style="font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;margin-bottom:16px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,0.18);">'+esc(s.names[pi])+'</div>'+photoHtml+body+'</div>';
           }).join('')+'</div>';
       } else { inner = '<p class="italic" style="padding:12px 0 20px;">Incomplete — awaiting both partners.</p>'; }
     }
