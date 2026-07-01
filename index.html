@@ -71,6 +71,9 @@ var SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 var EMAIL = 'Ninanaclay0306@gmail.com';
 // Dev-only guest sign-in: visible only when the URL has ?dev (never for real users).
 var DEV = /[?&]dev(=|&|$)/.test(location.search);
+// Which sign-in methods are live on the screen. Flip a flag to true the moment
+// that provider is configured in Supabase (Google is coming right after launch).
+var PROVIDERS = { apple:false, google:false, email:true };
 
 // SUPABASE (auth + RLS-enforced data)
 var sb = window.supabase.createClient(SURL, SKEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
@@ -314,13 +317,15 @@ function drawNav(tab, both) {
 }
 
 function drawAuth() {
+  var social = '';
+  if (PROVIDERS.apple)  social += '<button class="'+(social?'btn-ghost':'btn')+'" onclick="signInApple()">Continue with Apple</button>';
+  if (PROVIDERS.google) social += '<button class="'+(social?'btn-ghost':'btn')+'" onclick="signInGoogle()">Continue with Google</button>';
+  var emailPrimary = social==='';
   return '<div class="page"><h1>TWO<br>GETHER</h1><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:20px;">A private ritual for two</div><div class="divider"></div><p class="italic" style="margin:20px 0;">Sign in to begin. Your answers stay private until both of you submit.</p>'+
-    '<button class="btn" onclick="signInApple()">Continue with Apple</button>'+
-    '<button class="btn-ghost" onclick="signInGoogle()">Continue with Google</button>'+
-    '<div class="divider"></div>'+
-    '<label class="label">Or sign in with email</label>'+
+    social+
+    (social ? '<div class="divider"></div><label class="label">Or sign in with email</label>' : '<label class="label">Sign in with email</label>')+
     '<input id="authEmail" type="text" inputmode="email" placeholder="you@email.com" style="margin-top:8px;"/>'+
-    '<button class="btn-ghost" onclick="doEmail()">Email me a sign-in link</button>'+
+    '<button class="'+(emailPrimary?'btn':'btn-ghost')+'" onclick="doEmail()">Email me a sign-in link</button>'+
     (DEV ? '<button class="btn-ghost" onclick="signInGuest()" style="border-color:#E8FF6B;color:#E8FF6B;margin-top:20px;">Continue as guest · dev</button>' : '')+
     '<div class="err" id="authErr"></div>'+
     '<div id="authMsg" style="font-family:Georgia,serif;font-style:italic;color:#E8FF6B;font-size:13px;margin-top:12px;display:none;"></div></div>';
