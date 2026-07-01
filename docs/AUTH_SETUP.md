@@ -23,6 +23,9 @@ Supabase Dashboard → **SQL Editor** → New query → run **both**, in order:
 3. `supabase/migrations/0003_backfill_legacy.sql` — `claim_legacy_history()`, which copies a
    couple's old name-keyed check-ins into the new account schema after they re-pair. The old
    data is preserved untouched in `couples_legacy` / `checkins_legacy`.
+4. `supabase/migrations/0004_private_until_reveal.sql` — reveal privacy at the DB layer: a
+   partner can't read your answers until they've submitted their own for that week (writing/
+   overriding the partner's entry is already blocked by the insert/update policies).
 
 To test without Google/Apple, also turn on **Authentication → Providers → Anonymous sign-ins**,
 then open the app at `?dev=1` and use the lime **Continue as guest** button.
