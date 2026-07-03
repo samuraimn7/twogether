@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Twogether — logo lockups</title>
+<style>
+  :root{ --ink:#0C0C0E; --lime:#E8FF6B; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0C0C0E;color:#fff;font-family:'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:960px;margin:0 auto;padding:64px 24px 120px;}
+  .head{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+  .sub{font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.5);font-size:14px;margin:0 0 56px;}
+  .card{border:1px solid rgba(255,255,255,0.10);border-radius:14px;padding:44px 40px;margin-bottom:24px;position:relative;overflow:hidden;}
+  .card .tag{position:absolute;top:14px;right:16px;font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(255,255,255,0.28);}
+  .card.light{background:var(--lime);}
+  .card.light .tag{color:rgba(0,0,0,0.4);}
+
+  /* wordmark type */
+  .mark{display:flex;align-items:center;gap:22px;}
+  .mark.center{flex-direction:column;text-align:center;gap:18px;}
+  .word{font-weight:800;text-transform:uppercase;letter-spacing:-0.02em;line-height:0.9;font-size:clamp(34px,7vw,60px);}
+  .word .plus{color:var(--lime);}
+  .word.ink{color:var(--ink);}
+  .word.ink .plus{color:var(--ink);}
+  .word .lo{color:rgba(255,255,255,0.55);font-weight:800;}
+  .tagline{font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:rgba(255,255,255,0.42);margin-top:10px;}
+  .tagline.ink{color:rgba(0,0,0,0.55);}
+  .stack .word{line-height:0.86;}
+
+  /* small-size row */
+  .row{display:flex;align-items:center;gap:40px;flex-wrap:wrap;}
+  .mini{display:flex;align-items:center;gap:10px;}
+  .mini .word{font-size:20px;}
+  .mini .word.s{font-size:14px;}
+  .note{font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.4);font-size:12px;margin:6px 0 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">Twogether · logo lockups</div>
+  <p class="sub">The existing infinity + lime-plus mark paired with the wordmark. Black / white / lime — same DNA as the app.</p>
+
+  <!-- reusable icon symbol -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="tw-icon" viewBox="0 0 1024 1024">
+      <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z"
+            fill="none" stroke="#FFFFFF" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
+      <g fill="#E8FF6B">
+        <rect x="729" y="272" width="158" height="56" rx="28"/>
+        <rect x="780" y="221" width="56" height="158" rx="28"/>
+      </g>
+    </symbol>
+    <symbol id="tw-icon-ink" viewBox="0 0 1024 1024">
+      <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z"
+            fill="none" stroke="#0C0C0E" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
+      <g fill="#0C0C0E">
+        <rect x="729" y="272" width="158" height="56" rx="28"/>
+        <rect x="780" y="221" width="56" height="158" rx="28"/>
+      </g>
+    </symbol>
+  </svg>
+
+  <!-- 1. Primary horizontal lockup -->
+  <div class="card">
+    <span class="tag">01 · primary</span>
+    <div class="mark">
+      <svg width="76" height="76"><use href="#tw-icon"/></svg>
+      <div>
+        <div class="word">Twogether<span class="plus">+</span></div>
+        <div class="tagline">A private ritual for two</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Stacked wordmark -->
+  <div class="card">
+    <span class="tag">02 · stacked</span>
+    <div class="mark stack">
+      <svg width="92" height="92"><use href="#tw-icon"/></svg>
+      <div class="word">Two<br>gether<span class="plus">+</span></div>
+    </div>
+  </div>
+
+  <!-- 3. Two|gether emphasis -->
+  <div class="card">
+    <span class="tag">03 · two·gether</span>
+    <div class="mark">
+      <svg width="76" height="76"><use href="#tw-icon"/></svg>
+      <div class="word">Two<span class="lo">gether</span></div>
+    </div>
+    <p class="note">“Two” carries the weight; “gether” recedes — the word is literally built from two.</p>
+  </div>
+
+  <!-- 4. Centered / vertical (app store, splash, avatar) -->
+  <div class="card" style="text-align:center;">
+    <span class="tag">04 · centered</span>
+    <div class="mark center">
+      <svg width="88" height="88"><use href="#tw-icon"/></svg>
+      <div>
+        <div class="word">Twogether<span class="plus">+</span></div>
+        <div class="tagline">A private ritual for two</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Reversed on lime -->
+  <div class="card light">
+    <span class="tag">05 · on lime</span>
+    <div class="mark">
+      <svg width="76" height="76"><use href="#tw-icon-ink"/></svg>
+      <div>
+        <div class="word ink">Twogether<span class="plus">+</span></div>
+        <div class="tagline ink">A private ritual for two</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Small-size / favicon legibility -->
+  <div class="card">
+    <span class="tag">06 · small sizes</span>
+    <div class="row">
+      <div class="mini"><svg width="28" height="28"><use href="#tw-icon"/></svg><div class="word s">Twogether<span class="plus">+</span></div></div>
+      <div class="mini"><svg width="40" height="40"><use href="#tw-icon"/></svg><div class="word">Twogether<span class="plus">+</span></div></div>
+      <div class="mini"><svg width="20" height="20"><use href="#tw-icon"/></svg></div>
+    </div>
+    <p class="note">Holds up in a nav bar, a favicon, and an app-header at 20–40px.</p>
+  </div>
+
+</div>
+</body>
+</html>

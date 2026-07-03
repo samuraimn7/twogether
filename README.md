@@ -33,7 +33,8 @@ their own; answers unlock **only when both have submitted**. Live at
 
 - Weekly **lobby** showing both partners' status (Done ✓ / Not yet), only your row tappable
 - **Check-in** form (7 prompts; Q1 retired but still shown in history)
-- **Save & finish later** drafts (localStorage, one per couple+partner, survives week rollover)
+- **Save & finish later** drafts (localStorage + cloud-synced, one per couple+partner, survives
+  week rollover; resumes on the page where you left off, follows you across devices)
 - **Photo** per check-in (1, private Supabase Storage, shown in Reveal + Archive)
 - **Reveal** (side-by-side, gated until both submit) and **Archive** (grouped by person)
 - **Match** celebration when a partner joins
@@ -52,6 +53,7 @@ Run in order — see [`supabase/migrations/`](supabase/migrations/):
 4. `0004_private_until_reveal.sql` — reveal privacy read policy + `i_submitted()`
 5. `0005_week_status.sql` — `week_status()` for the lobby
 6. `0006_photo_storage.sql` — creates the private `checkin-photos` bucket + policies
+7. `0007_checkin_drafts.sql` — `checkin_drafts` table (owner-only) for cloud-synced drafts
 
 Plus `reset_my_week(text)` — powers the Redo button (deletes the caller's own week).
 

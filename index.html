@@ -73,7 +73,7 @@ var EMAIL = 'Ninanaclay0306@gmail.com';
 var DEV = /[?&]dev(=|&|$)/.test(location.search);
 // Which sign-in methods are live on the screen. Flip a flag to true the moment
 // that provider is configured in Supabase (Google is coming right after launch).
-var PROVIDERS = { apple:false, google:true, email:true };
+var PROVIDERS = { apple:true, google:true, email:true };
 // Dev-only offline mock: ?mock skips auth entirely and uses a local in-browser store.
 var MOCK = /[?&]mock(=|&|$)/.test(location.search);
 var mockStore = { weeks:{} };
@@ -161,7 +161,12 @@ function lsGet(k) { try { var v=localStorage.getItem(k); return v?JSON.parse(v):
 function lsSet(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch(e){} }
 // In-progress check-in draft — one per couple+partner, persists across weeks until submitted.
 function draftKey() { return 'tw_draft_'+ST.cid+'_'+ST.myIndex; }
-function saveDraft(a) { if (ST.cid!=null && ST.myIndex!=null) lsSet(draftKey(), a||ST.ans); }
+function saveDraft(a) {
+  if (ST.cid==null || ST.myIndex==null) return;
+  lsSet(draftKey(), a||ST.ans);
+  lsSet(draftTsKey(), Date.now());
+  cloudSaveDraft(a||ST.ans);
+}
 function draftHasContent(d) {
   if (!d) return false;
   for (var k in d) { var v=d[k];
@@ -188,11 +193,56 @@ function loadDraft() {
 function clearDraft() {
   try {
     var suf = '_'+ST.myIndex, rm = [];
-    for (var i=0;i<localStorage.length;i++) { var k = localStorage.key(i); if (k && k.indexOf('tw_draft_')===0 && k.slice(-suf.length)===suf) rm.push(k); }
+    for (var i=0;i<localStorage.length;i++) { var k = localStorage.key(i); if (k && (k.indexOf('tw_draft_')===0 || k.indexOf('tw_draftts_')===0) && k.slice(-suf.length)===suf) rm.push(k); }
     rm.forEach(function(k){ localStorage.removeItem(k); });
   } catch(e){}
+  cloudClearDraft();
 }
 function hasDraftContent() { return draftHasContent(loadDraft()); }
+// Which form step to resume on: the first question left unfilled (i.e. where they
+// dropped off). A brand-new check-in → 0; a fully-filled draft → the last step.
+function qFilled(a, q) {
+  var v = a ? a[q.id] : null;
+  if (q.type==='bullets') return Array.isArray(v) && v.some(function(x){ return x && String(x).trim(); });
+  if (q.type==='photos')  return Array.isArray(v) && v.length>0;
+  return !!(v && String(v).trim());
+}
+function resumeStep(a) {
+  for (var i=0;i<FORM_QS.length;i++) { if (!qFilled(a, FORM_QS[i])) return i; }
+  return FORM_QS.length-1;
+}
+// ── Cloud draft sync (best-effort backup of the localStorage draft) ──────────
+// localStorage stays the instant, primary store; the cloud copy just lets a draft
+// follow the user to another device. All cloud calls are non-blocking / fire-and-
+// forget so they never slow down or break the check-in if offline.
+function draftTsKey() { return 'tw_draftts_'+ST.cid+'_'+ST.myIndex; }
+function localDraftTs() { var v=lsGet(draftTsKey()); return typeof v==='number'?v:0; }
+var _cloudDraftTimer = null;
+function cloudSaveDraft(a) {
+  if (MOCK || !ST.user || ST.cid==null) return;
+  if (_cloudDraftTimer) clearTimeout(_cloudDraftTimer);
+  var snap = JSON.parse(JSON.stringify(a||ST.ans)), cid=ST.cid, uid=ST.user.id;
+  _cloudDraftTimer = setTimeout(function(){
+    sb.from('checkin_drafts')
+      .upsert({ couple_id:cid, user_id:uid, answers:snap, updated_at:new Date().toISOString() }, { onConflict:'couple_id,user_id' })
+      .then(function(r){ if (r && r.error) console.warn('cloud draft save', r.error); });
+  }, 800);
+}
+async function cloudLoadDraft() {
+  if (MOCK || !ST.user || ST.cid==null) return null;
+  try {
+    var r = await sb.from('checkin_drafts').select('answers,updated_at')
+      .eq('couple_id',ST.cid).eq('user_id',ST.user.id).limit(1);
+    if (r.error || !r.data || !r.data.length) return null;
+    return { answers:r.data[0].answers, ts:Date.parse(r.data[0].updated_at)||0 };
+  } catch(e) { return null; }
+}
+function cloudClearDraft() {
+  if (MOCK || !ST.user || ST.cid==null) return;
+  var cid=ST.cid, uid=ST.user.id;
+  sb.from('checkin_drafts').delete().eq('couple_id',cid).eq('user_id',uid)
+    .then(function(){}, function(){});
+}
 function mkCid(a,b) { return [a,b].map(function(n){return n.toLowerCase().trim();}).sort().join('_').replace(/\s+/g,''); }
 
 // STATE
@@ -380,6 +430,16 @@ async function boot() {
     await loadStatus();
     var mySubmitted = (c.myIndex===0 ? (wd&&wd.a0) : (wd&&wd.a1));
     var _draft = mySubmitted ? null : loadDraft();
+    if (!mySubmitted) {
+      // Cross-device sync: pull the cloud draft; newest copy (local vs cloud) wins.
+      var _cloud = await cloudLoadDraft();
+      if (_cloud && draftHasContent(_cloud.answers) && _cloud.ts > localDraftTs()) {
+        _draft = _cloud.answers;
+        lsSet(draftKey(), _draft); lsSet(draftTsKey(), _cloud.ts);   // hydrate this device
+      } else if (_draft && draftHasContent(_draft)) {
+        cloudSaveDraft(_draft);                                       // local is newer → back it up
+      }
+    }
     ST.ans = _draft ? Object.assign(emptyA(), _draft) : emptyA();
     if (ST.justMatched && c.couple && c.couple.locked) {
       ST.justMatched = false;
@@ -563,7 +623,7 @@ function redoWeek() {
   if (MOCK) { if (mockStore.weeks && mockStore.weeks[wk]) { delete mockStore.weeks[wk]['a'+ST.myIndex]; delete mockStore.weeks[wk]['t'+ST.myIndex]; mockSave(); } boot(); return; }
   sb.rpc('reset_my_week', { wk: wk }).then(function(r){ if (r && r.error) { alert('Could not redo: '+(r.error.message||'error')); return; } boot(); });
 }
-function startForm() { var d=loadDraft(); if (d) ST.ans = Object.assign(emptyA(), d); set({screen:'form', step:0}); }
+function startForm() { var d=loadDraft(); if (d) ST.ans = Object.assign(emptyA(), d); set({screen:'form', step:resumeStep(ST.ans)}); }
 
 function drawWaiting() {
   var s=ST, pn=s.names[s.li===0?1:0];

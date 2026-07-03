@@ -15,7 +15,7 @@ dashboards; **[me]** are code changes I make in `index.html`.
   [`supabase/migrations/0001_auth_pairing.sql`](../supabase/migrations/0001_auth_pairing.sql).
 
 ## Step 1 — Run the database migrations **[you]**
-Supabase Dashboard → **SQL Editor** → New query → run **both**, in order:
+Supabase Dashboard → **SQL Editor** → New query → run **all**, in order:
 1. `supabase/migrations/0001_auth_pairing.sql` — tables, RLS, `create_couple` / `join_couple`.
 2. `supabase/migrations/0002_pairing_immutable.sql` — DB triggers making a pairing permanent
    (membership can't be changed/removed; a locked couple can't be unlocked — *one account, one
@@ -26,6 +26,14 @@ Supabase Dashboard → **SQL Editor** → New query → run **both**, in order:
 4. `supabase/migrations/0004_private_until_reveal.sql` — reveal privacy at the DB layer: a
    partner can't read your answers until they've submitted their own for that week (writing/
    overriding the partner's entry is already blocked by the insert/update policies).
+5. `supabase/migrations/0005_week_status.sql` — `week_status()`, the lobby's both-partners
+   status read.
+6. `supabase/migrations/0006_photo_storage.sql` — creates the private `checkin-photos`
+   Storage bucket + its RLS policies. **Required for photo upload** — skipping it is what
+   causes "bucket not found." Idempotent and additive (touches no existing rows).
+7. `supabase/migrations/0007_checkin_drafts.sql` — `checkin_drafts` table (owner-only RLS)
+   so in-progress drafts sync to the cloud and follow the user across devices. The app still
+   works without it (drafts just stay local until it's run).
 
 To test without Google/Apple, also turn on **Authentication → Providers → Anonymous sign-ins**,
 then open the app at `?dev=1` and use the lime **Continue as guest** button.

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Twogether — app icon</title>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#141416;color:#fff;font-family:'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:900px;margin:0 auto;padding:56px 24px 120px;}
+  .head{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+  .sub{font-family:Georgia,serif;font-style:italic;color:rgba(255,255,255,0.5);font-size:14px;margin:0 0 48px;}
+  .grid{display:flex;gap:34px;flex-wrap:wrap;}
+  .opt{width:200px;}
+  .ic{width:200px;height:200px;border-radius:45px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,0.5);display:block;}
+  .cap{font-size:11px;letter-spacing:0.06em;margin-top:14px;color:#fff;font-weight:600;text-transform:uppercase;}
+  .cap span{display:block;font-weight:400;text-transform:none;letter-spacing:0;color:rgba(255,255,255,0.45);font-family:Georgia,serif;font-style:italic;font-size:12px;margin-top:4px;}
+  .badge{display:inline-block;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;background:#E8FF6B;color:#000;padding:2px 7px;border-radius:20px;margin-left:8px;vertical-align:middle;}
+
+  .divider{height:1px;background:rgba(255,255,255,0.08);margin:56px 0 44px;}
+  /* home-screen size test */
+  .home{display:flex;align-items:flex-end;gap:30px;}
+  .app{text-align:center;}
+  .app .ic{border-radius:0;}
+  .app .lab{font-size:11px;margin-top:8px;color:rgba(255,255,255,0.8);}
+  .r120{width:120px;height:120px;border-radius:27px;}
+  .r60{width:60px;height:60px;border-radius:14px;}
+  .r40{width:40px;height:40px;border-radius:9px;}
+  .r29{width:29px;height:29px;border-radius:7px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">Twogether · app icon</div>
+  <p class="sub">Your current mark, rendered as an iOS icon — plus on-brand variants. Infinity = two joined; lime plus = the check-in.</p>
+
+  <div class="grid">
+    <!-- A: current -->
+    <div class="opt">
+      <svg class="ic" viewBox="0 0 1024 1024">
+        <rect width="1024" height="1024" fill="#0C0C0E"/>
+        <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#fff" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
+        <g fill="#E8FF6B"><rect x="729" y="272" width="158" height="56" rx="28"/><rect x="780" y="221" width="56" height="158" rx="28"/></g>
+      </svg>
+      <div class="cap">A · Current<span>white ∞ · lime + · black</span></div>
+    </div>
+
+    <!-- B: lime infinity, centered plus knot -->
+    <div class="opt">
+      <svg class="ic" viewBox="0 0 1024 1024">
+        <rect width="1024" height="1024" fill="#0C0C0E"/>
+        <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#E8FF6B" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="cap">B · Lime knot<span>lime ∞, no plus — pure</span></div>
+    </div>
+
+    <!-- C: inverted, ink on lime -->
+    <div class="opt">
+      <svg class="ic" viewBox="0 0 1024 1024">
+        <rect width="1024" height="1024" fill="#E8FF6B"/>
+        <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#0C0C0E" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
+        <g fill="#0C0C0E"><rect x="729" y="272" width="158" height="56" rx="28"/><rect x="780" y="221" width="56" height="158" rx="28"/></g>
+      </svg>
+      <div class="cap">C · Inverted<span>ink on lime — bold</span></div>
+    </div>
+
+    <!-- D: gradient depth -->
+    <div class="opt">
+      <svg class="ic" viewBox="0 0 1024 1024">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a1f"/><stop offset="1" stop-color="#0C0C0E"/></linearGradient></defs>
+        <rect width="1024" height="1024" fill="url(#g)"/>
+        <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#fff" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
+        <g fill="#E8FF6B"><rect x="729" y="272" width="158" height="56" rx="28"/><rect x="780" y="221" width="56" height="158" rx="28"/></g>
+      </svg>
+      <div class="cap">D · Depth<span>subtle gradient bg</span></div>
+    </div>
+
+    <!-- E: centered plus over infinity crossing -->
+    <div class="opt">
+      <svg class="ic" viewBox="0 0 1024 1024">
+        <rect width="1024" height="1024" fill="#0C0C0E"/>
+        <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#fff" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
+        <g fill="#E8FF6B"><rect x="396" y="547" width="158" height="56" rx="28"/><rect x="447" y="496" width="56" height="158" rx="28"/></g>
+      </svg>
+      <div class="cap">E · Union<span>plus at the ∞ crossing</span></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="head" style="margin-bottom:24px;">Home-screen size test · option A</div>
+  <div class="home">
+    <div class="app">
+      <svg class="ic r120" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0C0C0E"/><path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#fff" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/><g fill="#E8FF6B"><rect x="729" y="272" width="158" height="56" rx="28"/><rect x="780" y="221" width="56" height="158" rx="28"/></g></svg>
+      <div class="lab">Twogether</div>
+    </div>
+    <svg class="ic r60" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0C0C0E"/><path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#fff" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/><g fill="#E8FF6B"><rect x="729" y="272" width="158" height="56" rx="28"/><rect x="780" y="221" width="56" height="158" rx="28"/></g></svg>
+    <svg class="ic r40" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0C0C0E"/><path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#fff" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/><g fill="#E8FF6B"><rect x="729" y="272" width="158" height="56" rx="28"/><rect x="780" y="221" width="56" height="158" rx="28"/></g></svg>
+    <svg class="ic r29" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0C0C0E"/><path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z" fill="none" stroke="#fff" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/><g fill="#E8FF6B"><rect x="729" y="272" width="158" height="56" rx="28"/><rect x="780" y="221" width="56" height="158" rx="28"/></g></svg>
+  </div>
+</div>
+</body>
+</html>

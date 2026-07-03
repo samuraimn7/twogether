@@ -1,11 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#0C0C0E"/>
-  <!-- infinity (white) -->
-  <path d="M475 575 C378 399 175 399 175 575 C175 751 378 751 475 575 C572 399 775 399 775 575 C775 751 572 751 475 575 Z"
-        fill="none" stroke="#FFFFFF" stroke-width="94" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- plus (lime), top-right -->
-  <g fill="#E8FF6B">
-    <rect x="729" y="272" width="158" height="56" rx="28"/>
-    <rect x="780" y="221" width="56" height="158" rx="28"/>
+  <rect width="1024" height="1024" fill="#E8FF6B"/>
+  <!-- wordmark (ink), stacked TWO / GETHER -->
+  <g fill="#0C0C0E" font-family="Helvetica Neue, Arial, sans-serif" font-weight="800" text-anchor="middle" letter-spacing="-6">
+    <text x="512" y="470" font-size="208">TWO</text>
+    <text x="512" y="720" font-size="208">GETHER</text>
+  </g>
+  <!-- plus accent (ink), top-right -->
+  <g fill="#0C0C0E">
+    <rect x="843" y="150" width="118" height="40" rx="20"/>
+    <rect x="881" y="112" width="40" height="118" rx="20"/>
   </g>
 </svg>
