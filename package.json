@@ -9,6 +9,8 @@
     "ios": "npm run sync && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/browser": "^7.0.5",
     "@capacitor/core": "^7.0.0",
     "@capacitor/ios": "^7.0.0"
   },

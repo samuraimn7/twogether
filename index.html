@@ -82,11 +82,19 @@ function mockSave(){ try{ localStorage.setItem('tw_mockdb', JSON.stringify(mockS
 var PHOTO_MAX = 1;
 
 // SUPABASE (auth + RLS-enforced data)
-var sb = window.supabase.createClient(SURL, SKEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
 function isNative(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+// On native we complete OAuth manually via the app deep-link, so detectSessionInUrl is off there.
+var sb = window.supabase.createClient(SURL, SKEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl: !isNative(), flowType:'pkce' } });
 function authRedirect(){ return isNative() ? 'space.twogether.app://auth-callback' : (window.location.origin + window.location.pathname); }
-function signInGoogle(){ sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: authRedirect() } }); }
-function signInApple(){ sb.auth.signInWithOAuth({ provider:'apple', options:{ redirectTo: authRedirect() } }); }
+function capPlugin(name){ return (window.Capacitor && window.Capacitor.Plugins) ? window.Capacitor.Plugins[name] : null; }
+// Native OAuth: open the provider in the in-app browser; the deep-link handler finishes sign-in.
+async function oauthNative(provider){
+  var r = await sb.auth.signInWithOAuth({ provider:provider, options:{ redirectTo: authRedirect(), skipBrowserRedirect:true } });
+  var B = capPlugin('Browser');
+  if (r && r.data && r.data.url && B) B.open({ url: r.data.url });
+}
+function signInGoogle(){ if (isNative()) return oauthNative('google'); sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: authRedirect() } }); }
+function signInApple(){ if (isNative()) return oauthNative('apple'); sb.auth.signInWithOAuth({ provider:'apple', options:{ redirectTo: authRedirect() } }); }
 function signInEmail(email){ return sb.auth.signInWithOtp({ email:email, options:{ emailRedirectTo: authRedirect() } }); }
 function signInGuest(){ sb.auth.signInAnonymously().then(function(r){ if(r&&r.error){ var e=document.getElementById('authErr'); if(e){e.textContent='Guest sign-in is off. Enable Anonymous sign-ins in Supabase.';e.style.display='block';} } }); }
 async function signOut(){ try{ await sb.auth.signOut(); }catch(e){} ST.user=null;ST.couple=null;ST.cid=null;ST.myIndex=null;ST.names=null;ST.li=null;ST.wd=null;ST.weeks=[];ST.justMatched=false;stopPoll();stopPairPoll();set({screen:'auth'}); }
@@ -456,6 +464,20 @@ async function boot() {
 sb.auth.onAuthStateChange(function(evt, session){
   if (evt==='SIGNED_IN' && session && ST.screen==='auth') { ST.user=session.user; boot(); }
 });
+// Native only: when the OAuth browser redirects back into the app, finish the session.
+if (isNative()) {
+  var appPlugin = capPlugin('App');
+  if (appPlugin) appPlugin.addListener('appUrlOpen', async function(data){
+    var url = (data && data.url) || '';
+    if (url.indexOf('auth-callback') === -1) return;
+    try {
+      var code = new URL(url).searchParams.get('code');
+      if (code) await sb.auth.exchangeCodeForSession(code);
+      var B = capPlugin('Browser'); if (B) { try { await B.close(); } catch(e){} }
+      boot();
+    } catch(e){ console.error('oauth deep-link', e); }
+  });
+}
 // RENDER HELPERS
 function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
 var root = document.getElementById('root');
@@ -501,8 +523,8 @@ function drawNav(tab, both) {
 
 function drawAuth() {
   var social = '';
-  if (PROVIDERS.apple)  social += '<button class="'+(social?'btn-ghost':'btn')+'" onclick="signInApple()">Continue with Apple</button>';
   if (PROVIDERS.google) social += '<button class="'+(social?'btn-ghost':'btn')+'" onclick="signInGoogle()">Continue with Google</button>';
+  if (PROVIDERS.apple)  social += '<button class="'+(social?'btn-ghost':'btn')+'" onclick="signInApple()">Continue with Apple</button>';
   var emailPrimary = social==='';
   return '<div class="page"><h1>TWO<br>GETHER</h1><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:20px;">A private ritual for two</div><div class="divider"></div><p class="italic" style="margin:20px 0;">Sign in to begin. Your answers stay private until both of you submit.</p>'+
     social+
