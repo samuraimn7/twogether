@@ -497,12 +497,18 @@ function drawForm() {
     }).join('');
   } else if (sec.type==='photos') {
     var ph = s.ans.photos || [];
-    var thumbs = ph.map(function(p,i){
-      var url = ST.photoCache[p] || '';
-      return '<div style="position:relative;width:48%;padding-bottom:48%;border:1px solid rgba(255,255,255,0.15);overflow:hidden;background:rgba(255,255,255,0.03);"><img src="'+url+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"><button onclick="removePhoto('+i+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.75);border:none;color:#fff;width:24px;height:24px;font-size:15px;line-height:1;cursor:pointer;border-radius:2px;">×</button></div>';
-    }).join('');
-    var add = ph.length < PHOTO_MAX ? '<label style="width:48%;padding-bottom:48%;position:relative;border:1px dashed rgba(255,255,255,0.28);cursor:pointer;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.45);font-size:34px;">+</span><input type="file" accept="image/*" onchange="onPhotos(this)" style="display:none;"></label>' : '';
-    inp = '<div style="display:flex;gap:4%;flex-wrap:wrap;">'+thumbs+add+'</div><div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:10px;">Optional · private until you both submit.</div>';
+    var note = '<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:10px;">Optional · private until you both submit.</div>';
+    if (ph.length) {
+      var url = ST.photoCache[ph[0]] || '';
+      inp = '<div style="position:relative;">'+
+        '<img src="'+url+'" style="width:100%;border-radius:2px;display:block;background:rgba(255,255,255,0.04);min-height:120px;object-fit:cover;">'+
+        '<button onclick="removePhoto(0)" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.78);border:none;color:#fff;width:30px;height:30px;font-size:17px;line-height:1;cursor:pointer;border-radius:3px;">×</button>'+
+        '</div>'+note;
+    } else {
+      inp = '<label style="display:flex;align-items:center;justify-content:center;height:150px;border:1px dashed rgba(255,255,255,0.28);cursor:pointer;color:rgba(255,255,255,0.5);">'+
+        '<span style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;">+ Add a photo</span>'+
+        '<input type="file" accept="image/*" onchange="onPhotos(this)" style="display:none;"></label>'+note;
+    }
   } else {
     inp = '<textarea data-p="'+sec.id+'" rows="3" placeholder="Write here…" style="min-height:104px;">'+esc(s.ans[sec.id])+'</textarea>';
     if (sec.hint) inp += '<div style="font-size:9px;font-style:italic;color:rgba(255,255,255,0.3);margin-top:6px;">'+sec.hint+'</div>';
