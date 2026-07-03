@@ -251,23 +251,27 @@ async function resolvePhotos(d) {
 }
 async function uploadPhoto(file) {
   if (MOCK) { var mu=URL.createObjectURL(file); ST.photoCache[mu]=mu; return mu; }
-  var ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')) || 'jpg';
-  var path = ST.cid + '/' + getWeek() + '/' + ST.myIndex + '/' + Date.now() + '-' + Math.floor(Math.random()*1e6) + '.' + ext;
-  var r = await sb.storage.from('checkin-photos').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
-  if (r.error) { console.error('upload', r.error); ST.lastUploadError = r.error.message || String(r.error); return null; }
-  return path;
+  try {
+    var ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')) || 'jpg';
+    var path = ST.cid + '/' + getWeek() + '/' + ST.myIndex + '/' + Date.now() + '-' + Math.floor(Math.random()*1e6) + '.' + ext;
+    var r = await sb.storage.from('checkin-photos').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
+    if (r.error) { console.error('upload', r.error); ST.lastUploadError = r.error.message || String(r.error); return null; }
+    return path;
+  } catch(e) { console.error('upload ex', e); ST.lastUploadError = (e && e.message) || String(e); return null; }
 }
 async function onPhotos(input) {
   ST.ans.photos = ST.ans.photos || [];
+  ST.photoErr = null;
   var files = Array.prototype.slice.call(input.files || []).slice(0, PHOTO_MAX - ST.ans.photos.length);
-  var err = document.getElementById('ferr');
   for (var i=0;i<files.length;i++) {
     var f = files[i], preview = URL.createObjectURL(f);
+    ST.photoPending = preview; draw();          // show the image right away
     var path = await uploadPhoto(f);
+    ST.photoPending = null;
     if (path) { ST.ans.photos.push(path); ST.photoCache[path] = preview; saveDraft(ST.ans); }
-    else if (err) { err.textContent = 'Upload failed: ' + (ST.lastUploadError || 'unknown error'); err.style.display='block'; }
+    else { ST.photoErr = 'Upload failed: ' + (ST.lastUploadError || 'unknown error'); }
+    draw();
   }
-  draw();
 }
 function removePhoto(i) { if (ST.ans.photos) { ST.ans.photos.splice(i,1); saveDraft(ST.ans); draw(); } }
 async function loadWeeks(cid) {
@@ -498,16 +502,19 @@ function drawForm() {
   } else if (sec.type==='photos') {
     var ph = s.ans.photos || [];
     var note = '<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:10px;">Optional · private until you both submit.</div>';
+    var errH = ST.photoErr ? '<div style="color:rgba(255,80,60,0.9);font-family:Georgia,serif;font-style:italic;font-size:12px;margin-top:8px;">'+esc(ST.photoErr)+'</div>' : '';
     if (ph.length) {
       var url = ST.photoCache[ph[0]] || '';
       inp = '<div style="position:relative;">'+
-        '<img src="'+url+'" style="width:100%;border-radius:2px;display:block;background:rgba(255,255,255,0.04);min-height:120px;object-fit:cover;">'+
+        '<img src="'+url+'" style="width:100%;border-radius:2px;display:block;background:rgba(255,255,255,0.04);min-height:120px;">'+
         '<button onclick="removePhoto(0)" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.78);border:none;color:#fff;width:30px;height:30px;font-size:17px;line-height:1;cursor:pointer;border-radius:3px;">×</button>'+
         '</div>'+note;
+    } else if (ST.photoPending) {
+      inp = '<div style="position:relative;"><img src="'+ST.photoPending+'" style="width:100%;border-radius:2px;display:block;opacity:0.55;min-height:120px;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;">Uploading…</div></div>'+note;
     } else {
       inp = '<label style="display:flex;align-items:center;justify-content:center;height:150px;border:1px dashed rgba(255,255,255,0.28);cursor:pointer;color:rgba(255,255,255,0.5);">'+
         '<span style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;">+ Add a photo</span>'+
-        '<input type="file" accept="image/*" onchange="onPhotos(this)" style="display:none;"></label>'+note;
+        '<input type="file" accept="image/*" onchange="onPhotos(this)" style="display:none;"></label>'+note+errH;
     }
   } else {
     inp = '<textarea data-p="'+sec.id+'" rows="3" placeholder="Write here…" style="min-height:104px;">'+esc(s.ans[sec.id])+'</textarea>';
