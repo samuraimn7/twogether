@@ -254,7 +254,7 @@ async function uploadPhoto(file) {
   var ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')) || 'jpg';
   var path = ST.cid + '/' + getWeek() + '/' + ST.myIndex + '/' + Date.now() + '-' + Math.floor(Math.random()*1e6) + '.' + ext;
   var r = await sb.storage.from('checkin-photos').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
-  if (r.error) { console.error('upload', r.error); return null; }
+  if (r.error) { console.error('upload', r.error); ST.lastUploadError = r.error.message || String(r.error); return null; }
   return path;
 }
 async function onPhotos(input) {
@@ -265,7 +265,7 @@ async function onPhotos(input) {
     var f = files[i], preview = URL.createObjectURL(f);
     var path = await uploadPhoto(f);
     if (path) { ST.ans.photos.push(path); ST.photoCache[path] = preview; saveDraft(ST.ans); }
-    else if (err) { err.textContent = 'Couldn’t upload — is photo storage set up in Supabase?'; err.style.display='block'; }
+    else if (err) { err.textContent = 'Upload failed: ' + (ST.lastUploadError || 'unknown error'); err.style.display='block'; }
   }
   draw();
 }
