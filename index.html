@@ -74,6 +74,12 @@ var DEV = /[?&]dev(=|&|$)/.test(location.search);
 // Which sign-in methods are live on the screen. Flip a flag to true the moment
 // that provider is configured in Supabase (Google is coming right after launch).
 var PROVIDERS = { apple:false, google:true, email:true };
+// Dev-only offline mock: ?mock skips auth entirely and uses a local in-browser store.
+var MOCK = /[?&]mock(=|&|$)/.test(location.search);
+var mockStore = { weeks:{} };
+function mockLoad(){ try{ mockStore = JSON.parse(localStorage.getItem('tw_mockdb')||'{"weeks":{}}'); }catch(e){ mockStore={weeks:{}}; } }
+function mockSave(){ try{ localStorage.setItem('tw_mockdb', JSON.stringify(mockStore)); }catch(e){} }
+var PHOTO_MAX = 1;
 
 // SUPABASE (auth + RLS-enforced data)
 var sb = window.supabase.createClient(SURL, SKEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
@@ -125,7 +131,7 @@ var QS = [
 // Questions still asked in the check-in form. Retired questions stay in QS (so the
 // Archive/Reveal/export can still render past answers) but are excluded from the form.
 var FORM_QS = QS.filter(function(q){ return !q.retired; });
-FORM_QS.push({ id:'photos', label:'Photos', q:'Add up to 3 photos from this week', type:'photos', req:false });
+FORM_QS.push({ id:'photos', label:'Photo', q:'Add a photo from this week', type:'photos', req:false });
 function emptyA() { return {appreciation:['','',''],loved:['','',''],attraction:['','',''],deep:'',improve:'',future:'',open:'',photos:[]}; }
 
 // WEEK
@@ -222,6 +228,7 @@ function set(patch) {
 
 // DATA
 async function loadWk(cid, wk) {
+  if (MOCK) { var w=(mockStore.weeks||{})[wk]||{}; var md={}; if(w.a0){md.a0=w.a0;md.t0=w.t0;} if(w.a1){md.a1=w.a1;md.t1=w.t1;} await resolvePhotos(md); return (md.a0||md.a1)?md:null; }
   var r = await sb.from('checkins').select('partner_index,answers,submitted_at').eq('couple_id',cid).eq('iso_week',wk);
   if (r.error || !r.data || !r.data.length) return null;
   var d = {};
@@ -231,6 +238,7 @@ async function loadWk(cid, wk) {
 }
 // --- photos (private Supabase Storage bucket "checkin-photos") ---
 async function resolvePhotos(d) {
+  if (MOCK) return;
   var paths = [];
   [d && d.a0, d && d.a1].forEach(function(a){
     if (a && Array.isArray(a.photos)) a.photos.forEach(function(p){ if (p && !ST.photoCache[p]) paths.push(p); });
@@ -242,6 +250,7 @@ async function resolvePhotos(d) {
   } catch(e) { console.error('signedUrls', e); }
 }
 async function uploadPhoto(file) {
+  if (MOCK) { var mu=URL.createObjectURL(file); ST.photoCache[mu]=mu; return mu; }
   var ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')) || 'jpg';
   var path = ST.cid + '/' + getWeek() + '/' + ST.myIndex + '/' + Date.now() + '-' + Math.floor(Math.random()*1e6) + '.' + ext;
   var r = await sb.storage.from('checkin-photos').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
@@ -250,7 +259,7 @@ async function uploadPhoto(file) {
 }
 async function onPhotos(input) {
   ST.ans.photos = ST.ans.photos || [];
-  var files = Array.prototype.slice.call(input.files || []).slice(0, 3 - ST.ans.photos.length);
+  var files = Array.prototype.slice.call(input.files || []).slice(0, PHOTO_MAX - ST.ans.photos.length);
   var err = document.getElementById('ferr');
   for (var i=0;i<files.length;i++) {
     var f = files[i], preview = URL.createObjectURL(f);
@@ -262,12 +271,14 @@ async function onPhotos(input) {
 }
 function removePhoto(i) { if (ST.ans.photos) { ST.ans.photos.splice(i,1); saveDraft(ST.ans); draw(); } }
 async function loadWeeks(cid) {
+  if (MOCK) return Object.keys(mockStore.weeks||{}).sort().reverse();
   var r = await sb.from('checkins').select('iso_week').eq('couple_id',cid).order('iso_week',{ascending:false});
   if (r.error || !r.data) return [];
   var seen={},out=[]; r.data.forEach(function(row){ if(!seen[row.iso_week]){seen[row.iso_week]=1;out.push(row.iso_week);} });
   return out;
 }
 async function saveWk(cid, wk, pi, ans) {
+  if (MOCK) { mockStore.weeks=mockStore.weeks||{}; mockStore.weeks[wk]=mockStore.weeks[wk]||{}; mockStore.weeks[wk]['a'+pi]=ans; mockStore.weeks[wk]['t'+pi]=new Date().toISOString(); mockSave(); return [{}]; }
   var r = await sb.from('checkins').upsert({couple_id:cid, iso_week:wk, partner_index:pi, user_id:ST.user.id, answers:ans, submitted_at:new Date().toISOString()}, {onConflict:'couple_id,iso_week,partner_index'}).select();
   if (r.error){ console.error('saveWk', r.error); return null; }
   return r.data;
@@ -288,6 +299,7 @@ function stopPoll() { if (ST.poll) { clearInterval(ST.poll); ST.poll = null; } }
 
 // Who has checked in this week (booleans only — no answers, which stay private till both submit)
 async function loadStatus() {
+  if (MOCK) { var mw=(mockStore.weeks||{})[getWeek()]||{}; ST.weekStatus={0:!!mw.a0,1:!!mw.a1}; return; }
   var st = {0:false, 1:false};
   try {
     var r = await sb.rpc('week_status', { wk: getWeek() });
@@ -338,6 +350,19 @@ function stopPairPoll() { if (ST.pairPoll) { clearInterval(ST.pairPoll); ST.pair
 // BOOT
 async function boot() {
   try {
+    if (MOCK) {
+      mockLoad();
+      ST.user={id:'dev'}; ST.cid='dev-couple'; ST.couple={id:'dev-couple',invite_code:'DEV123',locked:true};
+      ST.myIndex=0; ST.li=0; ST.names=['You','Partner'];
+      var mwk=getWeek();
+      var mwd=await loadWk('dev-couple', mwk);
+      var mweeks=await loadWeeks('dev-couple');
+      await loadStatus();
+      var md=loadDraft(); ST.ans = md ? Object.assign(emptyA(), md) : emptyA();
+      set({screen:'main', wd:mwd, weeks:mweeks, tab:0});
+      startStatusPoll();
+      return;
+    }
     var sess = await sb.auth.getSession();
     var session = sess.data ? sess.data.session : null;
     if (!session) { set({screen:'auth'}); return; }
@@ -421,6 +446,7 @@ function drawAuth() {
     '<input id="authEmail" type="text" inputmode="email" placeholder="you@email.com" style="margin-top:8px;"/>'+
     '<button class="'+(emailPrimary?'btn':'btn-ghost')+'" onclick="doEmail()">Email me a sign-in link</button>'+
     (DEV ? '<button class="btn-ghost" onclick="signInGuest()" style="border-color:#E8FF6B;color:#E8FF6B;margin-top:20px;">Continue as guest · dev</button>' : '')+
+    (DEV ? '<button class="btn-ghost" onclick="location.href=location.pathname+\'?mock\'" style="border-color:#E8FF6B;color:#E8FF6B;margin-top:10px;">Skip sign-in · local mock</button>' : '')+
     '<div class="err" id="authErr"></div>'+
     '<div id="authMsg" style="font-family:Georgia,serif;font-style:italic;color:#E8FF6B;font-size:13px;margin-top:12px;display:none;"></div></div>';
 }
@@ -473,10 +499,10 @@ function drawForm() {
     var ph = s.ans.photos || [];
     var thumbs = ph.map(function(p,i){
       var url = ST.photoCache[p] || '';
-      return '<div style="position:relative;width:31%;padding-bottom:31%;border:1px solid rgba(255,255,255,0.15);overflow:hidden;background:rgba(255,255,255,0.03);"><img src="'+url+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"><button onclick="removePhoto('+i+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.75);border:none;color:#fff;width:24px;height:24px;font-size:15px;line-height:1;cursor:pointer;border-radius:2px;">×</button></div>';
+      return '<div style="position:relative;width:48%;padding-bottom:48%;border:1px solid rgba(255,255,255,0.15);overflow:hidden;background:rgba(255,255,255,0.03);"><img src="'+url+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"><button onclick="removePhoto('+i+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.75);border:none;color:#fff;width:24px;height:24px;font-size:15px;line-height:1;cursor:pointer;border-radius:2px;">×</button></div>';
     }).join('');
-    var add = ph.length < 3 ? '<label style="width:31%;padding-bottom:31%;position:relative;border:1px dashed rgba(255,255,255,0.28);cursor:pointer;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.45);font-size:30px;">+</span><input type="file" accept="image/*" multiple onchange="onPhotos(this)" style="display:none;"></label>' : '';
-    inp = '<div style="display:flex;gap:3.5%;flex-wrap:wrap;">'+thumbs+add+'</div><div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:10px;">Up to 3 · optional · private until you both submit.</div>';
+    var add = ph.length < PHOTO_MAX ? '<label style="width:48%;padding-bottom:48%;position:relative;border:1px dashed rgba(255,255,255,0.28);cursor:pointer;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.45);font-size:34px;">+</span><input type="file" accept="image/*" onchange="onPhotos(this)" style="display:none;"></label>' : '';
+    inp = '<div style="display:flex;gap:4%;flex-wrap:wrap;">'+thumbs+add+'</div><div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:10px;">Optional · private until you both submit.</div>';
   } else {
     inp = '<textarea data-p="'+sec.id+'" rows="3" placeholder="Write here…" style="min-height:104px;">'+esc(s.ans[sec.id])+'</textarea>';
     if (sec.hint) inp += '<div style="font-size:9px;font-style:italic;color:rgba(255,255,255,0.3);margin-top:6px;">'+sec.hint+'</div>';
