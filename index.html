@@ -541,7 +541,14 @@ function drawLobby() {
   else if (meDone) msg = 'You’re done. Waiting for '+esc(s.names[partnerIdx])+' to check in.';
   else if (partnerDone) msg = esc(s.names[partnerIdx])+' has checked in. Your turn — answers stay private until you both submit.';
   else msg = 'Select your name to check in. Answers stay private until you both submit.';
-  return '<div class="page"><div style="display:flex;justify-content:space-between;margin-bottom:28px;"><span class="label">Week of</span><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+wkLabel(wk)+'</span></div><div class="divider"></div><p class="italic" style="margin:20px 0;">'+msg+'</p>'+rows+'</div>';
+  var redo = meDone ? '<button onclick="redoWeek()" style="background:none;border:none;color:rgba(255,255,255,0.35);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;margin-top:26px;cursor:pointer;">↺ Redo my check-in</button>' : '';
+  return '<div class="page"><div style="display:flex;justify-content:space-between;margin-bottom:28px;"><span class="label">Week of</span><span style="font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;">'+wkLabel(wk)+'</span></div><div class="divider"></div><p class="italic" style="margin:20px 0;">'+msg+'</p>'+rows+redo+'</div>';
+}
+function redoWeek() {
+  if (!confirm('Clear your check-in for this week so you can redo it?')) return;
+  var wk = getWeek();
+  if (MOCK) { if (mockStore.weeks && mockStore.weeks[wk]) { delete mockStore.weeks[wk]['a'+ST.myIndex]; delete mockStore.weeks[wk]['t'+ST.myIndex]; mockSave(); } boot(); return; }
+  sb.rpc('reset_my_week', { wk: wk }).then(function(r){ if (r && r.error) { alert('Could not redo: '+(r.error.message||'error')); return; } boot(); });
 }
 function startForm() { var d=loadDraft(); if (d) ST.ans = Object.assign(emptyA(), d); set({screen:'form', step:0}); }
 
