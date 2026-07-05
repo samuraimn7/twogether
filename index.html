@@ -771,12 +771,15 @@ function setTab(i) { stopPoll(); stopStatusPoll(); ST.screen='main'; set({tab:i}
 function doSignOut() { signOut(); }
 function doEmail() {
   var el=document.getElementById('authEmail'), err=document.getElementById('authErr'), msg=document.getElementById('authMsg');
-  var email=el?el.value.trim():''; if(err)err.style.display='none';
-  if(!email||email.indexOf('@')<1){ if(err){err.textContent='Enter a valid email address.';err.style.display='block';} return; }
+  var email=el?el.value.trim():'';
+  var showErr=function(t){ if(err){err.textContent=t;err.style.display='block';} if(msg)msg.style.display='none'; };
+  var showMsg=function(t){ if(msg){msg.textContent=t;msg.style.display='block';} if(err)err.style.display='none'; };
+  if(err)err.style.display='none'; if(msg)msg.style.display='none';   // clear both first
+  if(!email||email.indexOf('@')<1){ showErr('Enter a valid email address.'); return; }
   signInEmail(email).then(function(r){
-    if(r && r.error){ if(err){err.textContent='Could not send the link. Try again.';err.style.display='block';} return; }
-    if(msg){ msg.textContent='Check your email for a sign-in link.'; msg.style.display='block'; }
-  });
+    if(r && r.error){ showErr('Could not send the link: '+(r.error.message||'please try again.')); return; }
+    showMsg('Check your email for a sign-in link.');
+  }).catch(function(e){ showErr('Could not send the link: '+((e&&e.message)||'network error.')); });
 }
 async function doCreate() {
   var name=(document.getElementById('pairName').value||'').trim(), err=document.getElementById('pairErr');
