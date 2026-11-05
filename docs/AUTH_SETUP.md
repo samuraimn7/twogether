@@ -34,6 +34,9 @@ Supabase Dashboard → **SQL Editor** → New query → run **all**, in order:
 7. `supabase/migrations/0007_checkin_drafts.sql` — `checkin_drafts` table (owner-only RLS)
    so in-progress drafts sync to the cloud and follow the user across devices. The app still
    works without it (drafts just stay local until it's run).
+8. `supabase/migrations/0008_account_deletion.sql` — `delete_my_account()` (in-app account
+   deletion, App Store guideline 5.1.1(v)) and `set_my_name()` (name is optional, editable
+   from the Account screen). **Required for the Delete account button to work.**
 
 To test without Google/Apple, also turn on **Authentication → Providers → Anonymous sign-ins**,
 then open the app at `?dev=1` and use the lime **Continue as guest** button.

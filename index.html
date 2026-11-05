@@ -45,6 +45,10 @@ h2{font-weight:700;font-size:clamp(26px,7vw,40px);line-height:0.95;letter-spacin
 .bullet-dash{color:rgba(255,255,255,0.35);font-size:11px;margin-top:2px;flex-shrink:0;}
 .waiting-dots{display:flex;gap:6px;margin-top:20px;}
 .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.4);}
+.btn-social{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:50px;background:#fff;border:none;border-radius:8px;color:#000;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;font-size:17px;font-weight:600;letter-spacing:0;margin-top:12px;cursor:pointer;}
+.btn-social svg{width:18px;height:18px;flex:none;}
+.btn-danger{display:block;width:100%;background:transparent;border:1px solid rgba(255,80,60,0.6);color:rgba(255,110,90,0.95);padding:13px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;margin-top:12px;cursor:pointer;}
+.btn-danger.solid{background:rgba(255,80,60,0.9);border-color:transparent;color:#fff;}
 .err{color:rgba(255,80,60,0.9);font-family:Georgia,serif;font-style:italic;font-size:13px;margin-top:10px;display:none;}
 .banner{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.97);border-top:2px solid #E8FF6B;padding:20px 24px calc(20px + env(safe-area-inset-bottom));z-index:100;}
 .banner-title{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#E8FF6B;margin-bottom:6px;}
@@ -73,7 +77,7 @@ var EMAIL = 'Ninanaclay0306@gmail.com';
 var DEV = /[?&]dev(=|&|$)/.test(location.search);
 // Which sign-in methods are live on the screen. Flip a flag to true the moment
 // that provider is configured in Supabase (Google is coming right after launch).
-var PROVIDERS = { apple:true, google:true, email:true };
+var PROVIDERS = { apple:true, google:true, email:false };
 // Dev-only offline mock: ?mock skips auth entirely and uses a local in-browser store.
 var MOCK = /[?&]mock(=|&|$)/.test(location.search);
 var mockStore = { weeks:{} };
@@ -97,6 +101,9 @@ function signInGoogle(){ if (isNative()) return oauthNative('google'); sb.auth.s
 function signInApple(){ if (isNative()) return oauthNative('apple'); sb.auth.signInWithOAuth({ provider:'apple', options:{ redirectTo: authRedirect() } }); }
 function signInEmail(email){ return sb.auth.signInWithOtp({ email:email, options:{ emailRedirectTo: authRedirect() } }); }
 function signInGuest(){ sb.auth.signInAnonymously().then(function(r){ if(r&&r.error){ var e=document.getElementById('authErr'); if(e){e.textContent='Guest sign-in is off. Enable Anonymous sign-ins in Supabase.';e.style.display='block';} } }); }
+function isAppleUser(){ var u=ST.user; if(!u) return false; var a=u.app_metadata||{}; return a.provider==='apple' || (Array.isArray(a.providers) && a.providers.indexOf('apple')>=0); }
+// Name the sign-in provider already gave us (Apple: only if the user chose to share it).
+function metaName(){ var m=(ST.user&&ST.user.user_metadata)||{}; return String(m.full_name||m.name||'').trim(); }
 async function signOut(){ try{ await sb.auth.signOut(); }catch(e){} ST.user=null;ST.couple=null;ST.cid=null;ST.myIndex=null;ST.names=null;ST.li=null;ST.wd=null;ST.weeks=[];ST.justMatched=false;stopPoll();stopPairPoll();set({screen:'auth'}); }
 
 // who is the signed-in user paired with?
@@ -143,8 +150,8 @@ FORM_QS.push({ id:'photos', label:'Photo', q:'Add a photo from this week', type:
 function emptyA() { return {appreciation:['','',''],loved:['','',''],attraction:['','',''],deep:'',improve:'',future:'',open:'',photos:[]}; }
 
 // WEEK
-function getWeek() {
-  var d = new Date();
+function getWeek(at) {
+  var d = at!=null ? new Date(at) : new Date();
   var utc = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7));
   var y = utc.getUTCFullYear();
@@ -167,7 +174,8 @@ function wkLabel(wk) {
 // STORAGE
 function lsGet(k) { try { var v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch(e){return null;} }
 function lsSet(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch(e){} }
-// In-progress check-in draft — one per couple+partner, persists across weeks until submitted.
+// In-progress check-in draft — one per couple+partner, valid only for the week it was
+// written in. An unfinished draft from a past week is deleted, never carried over.
 function draftKey() { return 'tw_draft_'+ST.cid+'_'+ST.myIndex; }
 function saveDraft(a) {
   if (ST.cid==null || ST.myIndex==null) return;
@@ -186,24 +194,21 @@ function draftHasContent(d) {
 function loadDraft() {
   if (ST.cid==null || ST.myIndex==null) return null;
   var d = lsGet(draftKey());
-  if (d && draftHasContent(d)) return d;
-  // recover a stranded draft saved on this device under an older week/couple key
-  var suf = '_'+ST.myIndex;
-  for (var i=0;i<localStorage.length;i++) {
-    var k = localStorage.key(i);
-    if (k && k.indexOf('tw_draft_')===0 && k.slice(-suf.length)===suf && k!==draftKey()) {
-      var od = lsGet(k);
-      if (od && draftHasContent(od)) { lsSet(draftKey(), od); return od; }
-    }
-  }
+  if (d && getWeek(localDraftTs())!==getWeek()) { clearLocalDraft(); return null; }   // from a past week
   return d || null;
 }
-function clearDraft() {
+// Removes only this device's draft keys (tw_draft_*, tw_draftts_*) — never archived check-ins.
+function clearLocalDraft() {
   try {
     var suf = '_'+ST.myIndex, rm = [];
     for (var i=0;i<localStorage.length;i++) { var k = localStorage.key(i); if (k && (k.indexOf('tw_draft_')===0 || k.indexOf('tw_draftts_')===0) && k.slice(-suf.length)===suf) rm.push(k); }
     rm.forEach(function(k){ localStorage.removeItem(k); });
   } catch(e){}
+}
+function clearDraft() {
+  clearLocalDraft();
+  // cancel any pending debounced upsert, or it would resurrect the draft after the delete
+  if (_cloudDraftTimer) { clearTimeout(_cloudDraftTimer); _cloudDraftTimer = null; }
   cloudClearDraft();
 }
 function hasDraftContent() { return draftHasContent(loadDraft()); }
@@ -244,6 +249,18 @@ async function cloudLoadDraft() {
     if (r.error || !r.data || !r.data.length) return null;
     return { answers:r.data[0].answers, ts:Date.parse(r.data[0].updated_at)||0 };
   } catch(e) { return null; }
+}
+// When I last submitted any week — a cloud draft written before (or right after) that
+// is a leftover of an already-submitted check-in, not a real in-progress draft.
+async function myLastSubmitTs() {
+  if (MOCK || !ST.user || ST.cid==null) return 0;
+  try {
+    var r = await sb.from('checkins').select('submitted_at')
+      .eq('couple_id',ST.cid).eq('partner_index',ST.myIndex)
+      .order('submitted_at',{ascending:false}).limit(1);
+    if (r.error || !r.data || !r.data.length) return 0;
+    return Date.parse(r.data[0].submitted_at)||0;
+  } catch(e) { return 0; }
 }
 function cloudClearDraft() {
   if (MOCK || !ST.user || ST.cid==null) return;
@@ -441,6 +458,9 @@ async function boot() {
     if (!mySubmitted) {
       // Cross-device sync: pull the cloud draft; newest copy (local vs cloud) wins.
       var _cloud = await cloudLoadDraft();
+      if (_cloud && (getWeek(_cloud.ts)!==getWeek() || _cloud.ts < (await myLastSubmitTs()) + 5*60*1000)) {
+        cloudClearDraft(); _cloud = null;                             // past week's or already-submitted draft
+      }
       if (_cloud && draftHasContent(_cloud.answers) && _cloud.ts > localDraftTs()) {
         _draft = _cloud.answers;
         lsSet(draftKey(), _draft); lsSet(draftTsKey(), _cloud.ts);   // hydrate this device
@@ -491,6 +511,7 @@ function draw() {
   if (s.screen === 'pair')   { root.innerHTML = drawPair();   return; }
   if (s.screen === 'invite') { root.innerHTML = drawInvite(); return; }
   if (s.screen === 'matched') { root.innerHTML = drawMatched(); return; }
+  if (s.screen === 'account') { root.innerHTML = drawAccount(); return; }
 
   var s0=!!(s.wd&&s.wd.a0), s1=!!(s.wd&&s.wd.a1), both=s0&&s1;
   var mySub = s.myIndex!==null ? (s.myIndex===0?s0:s1) : false;
@@ -505,7 +526,7 @@ function draw() {
 
   var unlocked = s.couple && !s.couple.locked;
   root.innerHTML = drawNav(s.tab, both) +
-    '<div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">As <strong style="color:#fff">'+esc(s.names?s.names[s.myIndex]:'')+'</strong></span><button onclick="doSignOut()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Sign out</button></div>' +
+    '<div style="padding:8px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);">As <strong style="color:#fff">'+esc(s.names?s.names[s.myIndex]:'')+'</strong></span><span><button onclick="openAccount()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;margin-right:14px;">Account</button><button onclick="doSignOut()" style="background:none;border:none;color:rgba(255,255,255,0.38);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Sign out</button></span></div>' +
     (unlocked ? '<div style="padding:10px 24px;background:rgba(232,255,107,0.07);border-bottom:1px solid rgba(232,255,107,0.2);font-size:11px;color:#E8FF6B;text-align:center;letter-spacing:0.04em;">Waiting for your partner — share code <strong>'+esc(s.couple.invite_code)+'</strong></div>' : '') +
     '<div style="max-width:560px;margin:0 auto;">' + content + '</div>' +
     (s.expDone ? drawBanner() : '');
@@ -523,14 +544,19 @@ function drawNav(tab, both) {
 
 function drawAuth() {
   var social = '';
-  if (PROVIDERS.google) social += '<button class="'+(social?'btn-ghost':'btn')+'" onclick="signInGoogle()">Continue with Google</button>';
-  if (PROVIDERS.apple)  social += '<button class="'+(social?'btn-ghost':'btn')+'" onclick="signInApple()">Continue with Apple</button>';
+  if (PROVIDERS.apple)  social += '<button class="btn-social" onclick="signInApple()"><svg viewBox="0 0 384 512" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>Continue with Apple</button>';
+  if (PROVIDERS.google) social += '<button class="btn-social" onclick="signInGoogle()"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>Continue with Google</button>';
   var emailPrimary = social==='';
+  var emailBlock = '';
+  if (PROVIDERS.email) {
+    emailBlock =
+      (social ? '<div class="divider"></div><label class="label">Or sign in with email</label>' : '<label class="label">Sign in with email</label>')+
+      '<input id="authEmail" type="text" inputmode="email" placeholder="you@email.com" style="margin-top:8px;"/>'+
+      '<button class="'+(emailPrimary?'btn':'btn-ghost')+'" onclick="doEmail()">Email me a sign-in link</button>';
+  }
   return '<div class="page"><h1>TWO<br>GETHER</h1><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:20px;">A private ritual for two</div><div class="divider"></div><p class="italic" style="margin:20px 0;">Sign in to begin. Your answers stay private until both of you submit.</p>'+
     social+
-    (social ? '<div class="divider"></div><label class="label">Or sign in with email</label>' : '<label class="label">Sign in with email</label>')+
-    '<input id="authEmail" type="text" inputmode="email" placeholder="you@email.com" style="margin-top:8px;"/>'+
-    '<button class="'+(emailPrimary?'btn':'btn-ghost')+'" onclick="doEmail()">Email me a sign-in link</button>'+
+    emailBlock+
     (DEV ? '<button class="btn-ghost" onclick="signInGuest()" style="border-color:#E8FF6B;color:#E8FF6B;margin-top:20px;">Continue as guest · dev</button>' : '')+
     (DEV ? '<button class="btn-ghost" onclick="location.href=location.pathname+\'?mock\'" style="border-color:#E8FF6B;color:#E8FF6B;margin-top:10px;">Skip sign-in · local mock</button>' : '')+
     '<div class="err" id="authErr"></div>'+
@@ -540,14 +566,15 @@ function drawAuth() {
 function drawPair() {
   return '<div class="page"><span class="label">Connect</span><h2>Pair with<br>your partner</h2><div class="divider"></div><p class="italic" style="margin-bottom:8px;">Start a new space, or join your partner with their invite code.</p>'+
     '<div style="border:1px solid rgba(232,255,107,0.35);background:rgba(232,255,107,0.06);border-radius:2px;padding:13px 15px;margin-bottom:6px;font-family:Georgia,serif;font-style:italic;font-size:13px;color:rgba(255,255,255,0.78);line-height:1.6;">Pairing is permanent — one account, one partner, for life. <span style="color:#E8FF6B;font-style:normal;font-weight:700;letter-spacing:0.03em;">Forever.</span></div>'+
-    '<div style="margin:18px 0;"><label class="label">Your name</label><input id="pairName" type="text" placeholder="Your name" style="margin-top:8px;"/></div>'+
+    (isAppleUser() ? '<div style="height:18px;"></div>' : '<div style="margin:18px 0;"><label class="label">Your name · optional</label><input id="pairName" type="text" placeholder="What your partner calls you" value="'+esc(metaName())+'" style="margin-top:8px;"/></div>')+
     '<button class="btn" onclick="doCreate()">Create a new space</button>'+
     '<div class="divider"></div>'+
     '<label class="label">Got a code from your partner?</label>'+
     '<input id="joinCode" type="text" placeholder="6-character code" style="margin-top:8px;text-transform:uppercase;letter-spacing:0.2em;"/>'+
     '<button class="btn-ghost" onclick="doJoin()">Join my partner</button>'+
     '<div class="err" id="pairErr"></div>'+
-    '<button onclick="doSignOut()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;margin-top:28px;cursor:pointer;">Sign out</button></div>';
+    '<div style="display:flex;gap:22px;margin-top:28px;"><button onclick="doSignOut()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Sign out</button>'+
+    '<button onclick="openAccount()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;">Account</button></div></div>';
 }
 
 function drawInvite() {
@@ -563,6 +590,72 @@ function drawMatched() {
   return '<div class="page"><div style="font-size:56px;line-height:1;margin:18px 0 18px;">∞</div><span class="label">You\'re connected</span><h2>'+esc(me)+' &amp;<br>'+esc(partner)+'</h2><div class="divider"></div><p class="italic">You\'re paired — one account, one partner, for life. <span style="color:#E8FF6B;font-style:normal;font-weight:700;">Forever.</span> Time for your first weekly check-in together.</p><button class="btn" onclick="goStartCheckin()">Start our first check-in →</button></div>';
 }
 function goStartCheckin() { boot(); }
+
+// ACCOUNT — edit name, sign out, permanently delete the account (App Store 5.1.1(v)).
+function openAccount() { ST.accountBack = ST.screen; ST.delStep = 0; stopStatusPoll(); stopPairPoll(); set({screen:'account'}); }
+function closeAccount() { if (ST.accountBack==='pair') set({screen:'pair'}); else boot(); }
+function drawAccount() {
+  var s=ST, u=s.user||{}, paired=s.cid!=null && s.myIndex!=null;
+  var name = paired && s.names ? s.names[s.myIndex] : '';
+  if (/^Partner [12]$/.test(name)) name = '';
+  var who = u.email ? esc(u.email) : (isAppleUser() ? 'Signed in with Apple' : 'Signed in');
+  var del = s.delStep===1
+    ? '<div style="border:1px solid rgba(255,80,60,0.45);background:rgba(255,80,60,0.06);padding:14px 15px;margin-top:12px;font-family:Georgia,serif;font-style:italic;font-size:13px;line-height:1.6;color:rgba(255,255,255,0.8);">This permanently deletes your account, your check-in answers and your photos. Your partner keeps their own answers. This can’t be undone.</div>'+
+      '<button class="btn-danger solid" id="delBtn" onclick="doDeleteAccount()">Yes, delete my account</button>'+
+      '<button class="btn-ghost" onclick="set({delStep:0})">Cancel</button>'
+    : '<button class="btn-danger" onclick="set({delStep:1})">Delete account</button>';
+  return '<div class="page"><span class="label">Account</span><h2>Your<br>account</h2><div class="divider"></div>'+
+    '<p class="italic" style="margin:20px 0;">'+who+'</p>'+
+    (paired ? '<label class="label">Your name · optional</label><input id="acctName" type="text" placeholder="What your partner calls you" value="'+esc(name)+'" style="margin-top:8px;"/>'+
+      '<button class="btn-ghost" onclick="doSaveName()">Save name</button><div id="acctMsg" style="font-family:Georgia,serif;font-style:italic;color:#E8FF6B;font-size:13px;margin-top:10px;display:none;"></div>' : '')+
+    '<button class="btn-ghost" onclick="doSignOut()" style="margin-top:28px;">Sign out</button>'+
+    '<div class="divider" style="margin-top:28px;"></div>'+del+
+    '<div class="err" id="acctErr"></div>'+
+    '<button onclick="closeAccount()" style="background:none;border:none;color:rgba(255,255,255,0.35);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;margin-top:28px;cursor:pointer;">← Back</button></div>';
+}
+async function doSaveName() {
+  var name=((document.getElementById('acctName')||{}).value||'').trim(), msg=document.getElementById('acctMsg'), err=document.getElementById('acctErr');
+  if (err) err.style.display='none';
+  var r = MOCK ? {} : await sb.rpc('set_my_name', { p_name:name });
+  if (r && r.error) { if(err){err.textContent='Could not save your name. Try again.';err.style.display='block';} return; }
+  if (ST.names) ST.names[ST.myIndex] = name || ('Partner '+(ST.myIndex+1));
+  if (msg) { msg.textContent='Saved.'; msg.style.display='block'; }
+}
+// Removes my photos from Storage (the DB cascade can't), then deletes the account server-side.
+async function deleteMyPhotos() {
+  if (ST.cid==null || ST.myIndex==null) return;
+  var paths = {};
+  try {
+    var r = await sb.from('checkins').select('answers').eq('user_id', ST.user.id);
+    (r.data||[]).forEach(function(row){ ((row.answers||{}).photos||[]).forEach(function(p){ if (p) paths[p]=1; }); });
+    // also sweep my per-week folders (catches photos from unsubmitted drafts)
+    var weeks = (ST.weeks||[]).concat([getWeek()]);
+    for (var i=0;i<weeks.length;i++) {
+      var dir = ST.cid+'/'+weeks[i]+'/'+ST.myIndex;
+      var l = await sb.storage.from('checkin-photos').list(dir, { limit:1000 });
+      (l.data||[]).forEach(function(f){ if (f && f.name) paths[dir+'/'+f.name]=1; });
+    }
+    var all = Object.keys(paths);
+    if (all.length) await sb.storage.from('checkin-photos').remove(all);
+  } catch(e) { console.warn('delete photos', e); }
+}
+async function doDeleteAccount() {
+  var btn=document.getElementById('delBtn'), err=document.getElementById('acctErr');
+  if (btn) { btn.textContent='Deleting…'; btn.disabled=true; }
+  if (err) err.style.display='none';
+  if (MOCK) { try{ localStorage.removeItem('tw_mockdb'); }catch(e){} clearLocalDraft(); location.href=location.pathname; return; }
+  await deleteMyPhotos();
+  var r = await sb.rpc('delete_my_account');
+  if (r && r.error) {
+    console.error('delete_my_account', r.error);
+    if (btn) { btn.textContent='Yes, delete my account'; btn.disabled=false; }
+    if (err) { err.textContent='Could not delete your account: '+(r.error.message||'error')+'. Check your connection and try again.'; err.style.display='block'; }
+    return;
+  }
+  clearLocalDraft();
+  await signOut();
+  var m=document.getElementById('authMsg'); if (m) { m.textContent='Your account has been deleted.'; m.style.display='block'; }
+}
 
 function drawLogin() {
   var s=ST, s0=!!(s.wd&&s.wd.a0), s1=!!(s.wd&&s.wd.a1);
@@ -781,19 +874,19 @@ function doEmail() {
     showMsg('Check your email for a sign-in link.');
   }).catch(function(e){ showErr('Could not send the link: '+((e&&e.message)||'network error.')); });
 }
+// Name is optional: typed value, else what the sign-in provider shared, else blank ("Partner 1/2").
+function pairName() { var el=document.getElementById('pairName'); return ((el&&el.value)||'').trim() || metaName(); }
 async function doCreate() {
-  var name=(document.getElementById('pairName').value||'').trim(), err=document.getElementById('pairErr');
+  var name=pairName(), err=document.getElementById('pairErr');
   if(err)err.style.display='none';
-  if(!name){ if(err){err.textContent='Enter your name first.';err.style.display='block';} return; }
   var c=await createCouple(name);
   if(!c){ if(err){err.textContent='Could not create your space. Try again.';err.style.display='block';} return; }
-  ST.couple=c; ST.myIndex=0; ST.li=0; ST.names=[name,'Partner 2']; set({screen:'invite'});
+  ST.couple=c; ST.myIndex=0; ST.li=0; ST.names=[name||'Partner 1','Partner 2']; set({screen:'invite'});
 }
 async function doJoin() {
-  var name=(document.getElementById('pairName').value||'').trim();
+  var name=pairName();
   var code=(document.getElementById('joinCode').value||'').trim();
   var err=document.getElementById('pairErr'); if(err)err.style.display='none';
-  if(!name){ if(err){err.textContent='Enter your name first.';err.style.display='block';} return; }
   if(!code){ if(err){err.textContent="Enter your partner's code.";err.style.display='block';} return; }
   var r=await joinCouple(code, name);
   if(r.error){ var m={invalid_code:"That code doesn't match any space.",couple_locked:'That space is already full.',couple_full:'That space is already full.',already_in_couple:"You're already paired."}; if(err){err.textContent=(m[r.error]||'Could not join. Check the code and try again.');err.style.display='block';} return; }
