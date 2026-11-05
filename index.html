@@ -97,8 +97,8 @@ async function oauthNative(provider){
   var B = capPlugin('Browser');
   if (r && r.data && r.data.url && B) B.open({ url: r.data.url });
 }
-function signInGoogle(){ if (isNative()) return oauthNative('google'); sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: authRedirect() } }); }
-function signInApple(){ if (isNative()) return oauthNative('apple'); sb.auth.signInWithOAuth({ provider:'apple', options:{ redirectTo: authRedirect() } }); }
+function signInGoogle(){ lsSet('tw_oauth','google'); if (isNative()) return oauthNative('google'); sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: authRedirect() } }); }
+function signInApple(){ lsSet('tw_oauth','apple'); if (isNative()) return oauthNative('apple'); sb.auth.signInWithOAuth({ provider:'apple', options:{ redirectTo: authRedirect() } }); }
 function signInEmail(email){ return sb.auth.signInWithOtp({ email:email, options:{ emailRedirectTo: authRedirect() } }); }
 function signInGuest(){ sb.auth.signInAnonymously().then(function(r){ if(r&&r.error){ var e=document.getElementById('authErr'); if(e){e.textContent='Guest sign-in is off. Enable Anonymous sign-ins in Supabase.';e.style.display='block';} } }); }
 function isAppleUser(){ var u=ST.user; if(!u) return false; var a=u.app_metadata||{}; return a.provider==='apple' || (Array.isArray(a.providers) && a.providers.indexOf('apple')>=0); }
@@ -115,7 +115,7 @@ async function loadCouple(){
   var names=['',''];
   (mem.data||[]).forEach(function(m){ names[m.partner_index]=m.display_name||''; });
   names[0]=names[0]||'Partner 1'; names[1]=names[1]||'Partner 2';
-  var cpl = await sb.from('couples').select('id,invite_code,locked').eq('id', cid).single();
+  var cpl = await sb.from('couples').select('*').eq('id', cid).single();
   return { cid:cid, myIndex:mine.data[0].partner_index, names:names, couple:cpl.data };
 }
 async function createCouple(name){
@@ -413,7 +413,7 @@ function startPairPoll() {
   stopPairPoll();
   ST.pairPoll = setInterval(async function() {
     if (!ST.cid || (ST.couple && ST.couple.locked)) { stopPairPoll(); return; }
-    var cpl = await sb.from('couples').select('id,invite_code,locked').eq('id', ST.cid).single();
+    var cpl = await sb.from('couples').select('*').eq('id', ST.cid).single();
     if (cpl.data && cpl.data.locked) {
       stopPairPoll();
       var mem = await sb.from('couple_members').select('partner_index,display_name').eq('couple_id', ST.cid);
@@ -482,6 +482,13 @@ async function boot() {
   }
 }
 sb.auth.onAuthStateChange(function(evt, session){
+  // Right after Sign in with Apple, keep Apple's refresh token server-side so it can be
+  // revoked if the account is ever deleted (Apple's account-deletion requirement).
+  if (evt==='SIGNED_IN' && session && session.provider_refresh_token && lsGet('tw_oauth')==='apple') {
+    var tok = session.provider_refresh_token;
+    setTimeout(function(){ sb.rpc('save_apple_token', { p_token:tok }).then(function(r){ if (r && r.error) console.warn('save_apple_token', r.error); }); }, 0);
+    try { localStorage.removeItem('tw_oauth'); } catch(e){}
+  }
   if (evt==='SIGNED_IN' && session && ST.screen==='auth') { ST.user=session.user; boot(); }
 });
 // Native only: when the OAuth browser redirects back into the app, finish the session.
@@ -645,6 +652,10 @@ async function doDeleteAccount() {
   if (err) err.style.display='none';
   if (MOCK) { try{ localStorage.removeItem('tw_mockdb'); }catch(e){} clearLocalDraft(); location.href=location.pathname; return; }
   await deleteMyPhotos();
+  if (isAppleUser()) {
+    try { var rv = await sb.functions.invoke('revoke-apple', { method:'POST' }); if (rv && rv.error) console.warn('revoke-apple', rv.error); }
+    catch(e) { console.warn('revoke-apple', e); }
+  }
   var r = await sb.rpc('delete_my_account');
   if (r && r.error) {
     console.error('delete_my_account', r.error);
@@ -714,7 +725,34 @@ function drawForm() {
     '</div>';
 }
 
+// Partner deleted their account: archive stays readable, check-ins stop, and the
+// remaining partner can start fresh (deletes the old space) to pair with someone new.
+function drawEnded() {
+  var confirmBox = ST.freshStep===1
+    ? '<div style="border:1px solid rgba(255,80,60,0.45);background:rgba(255,80,60,0.06);padding:14px 15px;margin-top:20px;font-family:Georgia,serif;font-style:italic;font-size:13px;line-height:1.6;color:rgba(255,255,255,0.8);">Starting fresh permanently deletes this space, including your past answers and photos, so you can pair with someone new. This can’t be undone.</div>'+
+      '<button class="btn-danger solid" id="freshBtn" onclick="doStartFresh()">Yes, start fresh</button>'+
+      '<button class="btn-ghost" onclick="set({freshStep:0})">Cancel</button>'
+    : '<button class="btn" onclick="setTab(2)">View our archive</button><button class="btn-danger" onclick="set({freshStep:1})">Start fresh</button>';
+  return '<div class="page"><span class="label">Space ended</span><h2>Your partner<br>left</h2><div class="divider"></div>'+
+    '<p class="italic" style="margin:20px 0;">Your partner deleted their account. Your own answers are still in the archive, but there are no new check-ins in this space.</p>'+
+    confirmBox+'<div class="err" id="freshErr"></div></div>';
+}
+async function doStartFresh() {
+  var btn=document.getElementById('freshBtn'), err=document.getElementById('freshErr');
+  if (btn) { btn.textContent='Clearing…'; btn.disabled=true; }
+  await deleteMyPhotos();
+  var r = await sb.rpc('leave_ended_couple');
+  if (r && r.error) {
+    if (btn) { btn.textContent='Yes, start fresh'; btn.disabled=false; }
+    if (err) { err.textContent='Could not start fresh: '+(r.error.message||'error')+'. Try again.'; err.style.display='block'; }
+    return;
+  }
+  clearDraft();
+  ST.cid=null; ST.couple=null; ST.myIndex=null; ST.names=null; ST.wd=null; ST.weeks=[]; ST.freshStep=0;
+  stopStatusPoll(); boot();
+}
 function drawLobby() {
+  if (ST.couple && ST.couple.ended) return drawEnded();
   var s=ST, wk=getWeek(), st=s.weekStatus||{0:false,1:false};
   var partnerIdx=(s.myIndex===0?1:0), meDone=!!st[s.myIndex], partnerDone=!!st[partnerIdx];
   var rows = (s.names||['','']).map(function(nm,i){
@@ -738,7 +776,7 @@ function redoWeek() {
   if (MOCK) { if (mockStore.weeks && mockStore.weeks[wk]) { delete mockStore.weeks[wk]['a'+ST.myIndex]; delete mockStore.weeks[wk]['t'+ST.myIndex]; mockSave(); } boot(); return; }
   sb.rpc('reset_my_week', { wk: wk }).then(function(r){ if (r && r.error) { alert('Could not redo: '+(r.error.message||'error')); return; } boot(); });
 }
-function startForm() { var d=loadDraft(); if (d) ST.ans = Object.assign(emptyA(), d); set({screen:'form', step:resumeStep(ST.ans)}); }
+function startForm() { if (ST.couple && ST.couple.ended) return; var d=loadDraft(); if (d) ST.ans = Object.assign(emptyA(), d); set({screen:'form', step:resumeStep(ST.ans)}); }
 
 function drawWaiting() {
   var s=ST, pn=s.names[s.li===0?1:0];

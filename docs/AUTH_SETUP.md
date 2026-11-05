@@ -37,6 +37,21 @@ Supabase Dashboard → **SQL Editor** → New query → run **all**, in order:
 8. `supabase/migrations/0008_account_deletion.sql` — `delete_my_account()` (in-app account
    deletion, App Store guideline 5.1.1(v)) and `set_my_name()` (name is optional, editable
    from the Account screen). **Required for the Delete account button to work.**
+9. `supabase/migrations/0009_apple_revoke_fresh_start.sql` — stores Apple refresh tokens
+   (write-only) for revocation on deletion, and lets the remaining partner "start fresh"
+   after their partner deletes their account (`couples.ended`, `leave_ended_couple()`).
+
+### Edge Function: `revoke-apple`
+Revokes the user's Sign in with Apple tokens before account deletion (Apple requirement).
+```
+supabase login
+supabase secrets set --project-ref kpzeahhwldycfgaxlvsx APPLE_TEAM_ID=FXQBQ4C8H8 \
+  APPLE_KEY_ID=<key id> APPLE_CLIENT_ID=<Services ID used in Supabase's Apple provider> \
+  APPLE_PRIVATE_KEY="$(cat AuthKey_<key id>.p8)"
+supabase functions deploy revoke-apple --project-ref kpzeahhwldycfgaxlvsx
+```
+Only users who sign in with Apple after this ships have a stored token; deletion never
+waits on revocation succeeding.
 
 To test without Google/Apple, also turn on **Authentication → Providers → Anonymous sign-ins**,
 then open the app at `?dev=1` and use the lime **Continue as guest** button.
